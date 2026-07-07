@@ -17,7 +17,7 @@ export default function Dashboard({ token }) {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/dashboard/', {
+        const response = await fetch(`http://${window.location.hostname}:8000/api/dashboard/`, {
           headers: {
             'Authorization': `Token ${token}`,
           }

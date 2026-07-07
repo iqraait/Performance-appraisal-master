@@ -49,7 +49,7 @@ export default function AppraisalReports({ token }) {
   const fetchReports = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/appraisals/?${getQueryString()}`, {
+      const response = await fetch(`http://${window.location.hostname}:8000/api/appraisals/?${getQueryString()}`, {
         headers: { 'Authorization': `Token ${token}` }
       });
       if (response.ok) {
@@ -82,7 +82,7 @@ export default function AppraisalReports({ token }) {
   }, [search, codeFilter, nameFilter, deptFilter, desigFilter, periodFilter, ratingFilter, startDate, endDate]);
 
   const handleExportExcel = () => {
-    const exportUrl = `http://127.0.0.1:8000/api/appraisals/export-excel/?${getQueryString()}`;
+    const exportUrl = `http://${window.location.hostname}:8000/api/appraisals/export-excel/?${getQueryString()}`;
     const link = document.createElement('a');
     link.href = exportUrl;
     link.setAttribute('download', 'appraisal_reports.xlsx');

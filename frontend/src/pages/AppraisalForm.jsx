@@ -87,7 +87,7 @@ export default function AppraisalForm({ token, user }) {
     
     setFetching(true);
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/employees/fetch/?code=${code}`);
+      const response = await fetch(`http://${window.location.hostname}:8000/api/employees/fetch/?code=${code}`);
       const data = await response.json();
       
       if (response.ok) {
@@ -115,7 +115,7 @@ export default function AppraisalForm({ token, user }) {
 
     setLoadingHistory(true);
     try {
-      const url = `http://127.0.0.1:8000/api/appraisals/?employee_code=${code}`;
+      const url = `http://${window.location.hostname}:8000/api/appraisals/?employee_code=${code}`;
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -229,8 +229,8 @@ export default function AppraisalForm({ token, user }) {
       };
 
       const url = editingAppraisalId 
-        ? `http://127.0.0.1:8000/api/appraisals/${editingAppraisalId}/` 
-        : 'http://127.0.0.1:8000/api/appraisals/';
+        ? `http://${window.location.hostname}:8000/api/appraisals/${editingAppraisalId}/` 
+        : `http://${window.location.hostname}:8000/api/appraisals/`;
       
       const method = editingAppraisalId ? 'PUT' : 'POST';
 
@@ -301,7 +301,7 @@ export default function AppraisalForm({ token, user }) {
     if (!window.confirm("Once approved, you can no longer edit this appraisal. Do you want to finalize now?")) return;
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/appraisals/${appraisalId}/approve/`, {
+      const response = await fetch(`http://${window.location.hostname}:8000/api/appraisals/${appraisalId}/approve/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

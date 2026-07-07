@@ -60,7 +60,7 @@ export default function EmployeeMaster({ token }) {
   const fetchEmployees = async () => {
     setLoading(true);
     try {
-      let url = `http://127.0.0.1:8000/api/employees/?search=${search}&department=${deptFilter}&designation=${desigFilter}&status=${statusFilter}`;
+      let url = `http://${window.location.hostname}:8000/api/employees/?search=${search}&department=${deptFilter}&designation=${desigFilter}&status=${statusFilter}`;
       const response = await fetch(url, {
         headers: { 'Authorization': `Token ${token}` }
       });
@@ -88,7 +88,7 @@ export default function EmployeeMaster({ token }) {
   }, [search, deptFilter, desigFilter, statusFilter]);
 
   const handleExportEmployees = () => {
-    const exportUrl = `http://127.0.0.1:8000/api/employees/export-excel/?search=${search}&department=${deptFilter}&designation=${desigFilter}&status=${statusFilter}`;
+    const exportUrl = `http://${window.location.hostname}:8000/api/employees/export-excel/?search=${search}&department=${deptFilter}&designation=${desigFilter}&status=${statusFilter}`;
     triggerToast('Preparing Excel export...');
     fetch(exportUrl, {
       headers: { 'Authorization': `Token ${token}` }
@@ -114,7 +114,7 @@ export default function EmployeeMaster({ token }) {
   const handleAddSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/employees/', {
+      const response = await fetch(`http://${window.location.hostname}:8000/api/employees/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -154,7 +154,7 @@ export default function EmployeeMaster({ token }) {
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/employees/${activeEmployee.id}/`, {
+      const response = await fetch(`http://${window.location.hostname}:8000/api/employees/${activeEmployee.id}/`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -180,7 +180,7 @@ export default function EmployeeMaster({ token }) {
     if (!window.confirm("Are you sure you want to delete this employee?")) return;
     
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/employees/${empId}/`, {
+      const response = await fetch(`http://${window.location.hostname}:8000/api/employees/${empId}/`, {
         method: 'DELETE',
         headers: { 'Authorization': `Token ${token}` }
       });
@@ -230,7 +230,7 @@ export default function EmployeeMaster({ token }) {
     uploadData.append('file', excelFile);
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/employees/import-excel/', {
+      const response = await fetch(`http://${window.location.hostname}:8000/api/employees/import-excel/`, {
         method: 'POST',
         headers: { 'Authorization': `Token ${token}` },
         body: uploadData
