@@ -1,0 +1,41 @@
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local databases and media files
+db.sqlite3
+media/
+static/collected/
+
+# Node modules and build files
+node_modules/
+dist/
+build/
+.eslintcache
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+
+# IDE and OS files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+.DS_Store
+Thumbs.db
