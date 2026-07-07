@@ -96,24 +96,33 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  color: #94a3b8;
+  color: #ffffff;
   text-decoration: none;
   font-weight: 500;
   border-radius: var(--radius-sm);
   transition: all 0.2s ease;
 }
 
+.sidebar-link svg {
+  color: var(--accent); /* Orange brand icons */
+  transition: color 0.2s ease;
+}
+
 .sidebar-link:hover {
   color: #ffffff;
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: rgba(255, 255, 255, 0.08);
   transform: translateX(4px);
 }
 
 .sidebar-link.active {
   color: #ffffff !important;
-  background: linear-gradient(135deg, var(--primary), var(--accent));
+  background: var(--accent); /* Solid orange AppraisalPro active background */
   transform: translateX(4px);
-  box-shadow: 0 4px 12px rgba(234, 88, 12, 0.15);
+  box-shadow: 0 4px 12px rgba(234, 88, 12, 0.2);
+}
+
+.sidebar-link.active svg {
+  color: #ffffff;
 }
 
 .sidebar-footer {
