@@ -46,8 +46,21 @@ export default function AppraisalForm({ token, user }) {
     initiative_improvement: 0
   });
 
-  // Deduction manually entered
-  const [totalDeduction, setTotalDeduction] = useState(0);
+  // Individual deductions state
+  const [deductionDetails, setDeductionDetails] = useState({
+    unapproved_absence: 0,
+    late_attendance: 0,
+    misconduct: 0,
+    protocol_violation: 0,
+    written_warning: 0
+  });
+
+  const totalDeduction = 
+    Number(deductionDetails.unapproved_absence) +
+    Number(deductionDetails.late_attendance) +
+    Number(deductionDetails.misconduct) +
+    Number(deductionDetails.protocol_violation) +
+    Number(deductionDetails.written_warning);
 
   // Validation errors
   const [validationErrors, setValidationErrors] = useState({});
@@ -161,7 +174,7 @@ export default function AppraisalForm({ token, user }) {
     setScores(prev => ({ ...prev, [field]: val }));
   };
 
-  const handleDeductionChange = (value) => {
+  const handleDetailDeductionChange = (field, value) => {
     const num = Number(value);
     let errors = { ...validationErrors };
     
@@ -172,8 +185,8 @@ export default function AppraisalForm({ token, user }) {
     }
     setValidationErrors(errors);
 
-    const deduction = value === '' ? '' : Math.max(0, num);
-    setTotalDeduction(deduction);
+    const val = value === '' ? 0 : Math.max(0, num);
+    setDeductionDetails(prev => ({ ...prev, [field]: val }));
   };
 
   const validateForm = () => {
@@ -193,7 +206,7 @@ export default function AppraisalForm({ token, user }) {
       }
     });
 
-    if (totalDeduction === '' || totalDeduction < 0) {
+    if (totalDeduction < 0) {
       errors.deductions = 'Required score >= 0';
       isValid = false;
     }
@@ -256,7 +269,13 @@ export default function AppraisalForm({ token, user }) {
           professionalism_discipline: 0,
           initiative_improvement: 0
         });
-        setTotalDeduction(0);
+        setDeductionDetails({
+          unapproved_absence: 0,
+          late_attendance: 0,
+          misconduct: 0,
+          protocol_violation: 0,
+          written_warning: 0
+        });
         setEditingAppraisalId(null);
         
         fetchMySubmissions(employeeCode);
@@ -285,7 +304,13 @@ export default function AppraisalForm({ token, user }) {
       professionalism_discipline: appraisal.professionalism_discipline,
       initiative_improvement: appraisal.initiative_improvement
     });
-    setTotalDeduction(appraisal.total_deduction);
+    setDeductionDetails({
+      unapproved_absence: appraisal.total_deduction || 0,
+      late_attendance: 0,
+      misconduct: 0,
+      protocol_violation: 0,
+      written_warning: 0
+    });
     
     setEmployeeName(appraisal.employee_name);
     setDepartment(appraisal.department);
@@ -832,6 +857,7 @@ export default function AppraisalForm({ token, user }) {
                             <th style={{ color: textDark }}>Issue type</th>
                             <th style={{ color: textDark }}>Deduction Scale</th>
                             <th style={{ color: textDark }}>Guideline Remarks</th>
+                            <th style={{ color: textDark, width: '120px', textAlign: 'center' }}>Deduction Score</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -839,26 +865,76 @@ export default function AppraisalForm({ token, user }) {
                             <td style={{ fontWeight: '500', color: '#000000' }}>Unapproved absence</td>
                             <td style={{ color: '#ef4444', fontWeight: '600' }}>-2 marks/day</td>
                             <td style={{ color: '#000000' }}>Absence without written request or valid medical justification.</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <input 
+                                type="number"
+                                className="form-control"
+                                min="0"
+                                value={deductionDetails.unapproved_absence}
+                                onChange={(e) => handleDetailDeductionChange('unapproved_absence', e.target.value)}
+                                style={{ width: '80px', textAlign: 'center', fontWeight: '600', padding: '4px 6px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
+                              />
+                            </td>
                           </tr>
                           <tr>
                             <td style={{ fontWeight: '500', color: '#000000' }}>Late/early attendance</td>
                             <td style={{ color: '#ef4444', fontWeight: '600' }}>-1 mark</td>
                             <td style={{ color: '#000000' }}>If the employee has &gt;3 instances of unexcused late/early checkouts.</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <input 
+                                type="number"
+                                className="form-control"
+                                min="0"
+                                value={deductionDetails.late_attendance}
+                                onChange={(e) => handleDetailDeductionChange('late_attendance', e.target.value)}
+                                style={{ width: '80px', textAlign: 'center', fontWeight: '600', padding: '4px 6px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
+                              />
+                            </td>
                           </tr>
                           <tr>
                             <td style={{ fontWeight: '500', color: '#000000' }}>Misconduct</td>
                             <td style={{ color: '#ef4444', fontWeight: '600' }}>-2 to -5 marks</td>
                             <td style={{ color: '#000000' }}>Deduct according to investigation findings and warning severity.</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <input 
+                                type="number"
+                                className="form-control"
+                                min="0"
+                                value={deductionDetails.misconduct}
+                                onChange={(e) => handleDetailDeductionChange('misconduct', e.target.value)}
+                                style={{ width: '80px', textAlign: 'center', fontWeight: '600', padding: '4px 6px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
+                              />
+                            </td>
                           </tr>
                           <tr>
                             <td style={{ fontWeight: '500', color: '#000000' }}>Protocol violation</td>
                             <td style={{ color: '#ef4444', fontWeight: '600' }}>-3 marks/incident</td>
                             <td style={{ color: '#000000' }}>Verified violation of patient care, safety, or clinical SOPs.</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <input 
+                                type="number"
+                                className="form-control"
+                                min="0"
+                                value={deductionDetails.protocol_violation}
+                                onChange={(e) => handleDetailDeductionChange('protocol_violation', e.target.value)}
+                                style={{ width: '80px', textAlign: 'center', fontWeight: '600', padding: '4px 6px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
+                              />
+                            </td>
                           </tr>
                           <tr>
                             <td style={{ fontWeight: '500', color: '#000000' }}>Disciplinary written warning</td>
                             <td style={{ color: '#ef4444', fontWeight: '600' }}>-5 marks</td>
                             <td style={{ color: '#000000' }}>Issued written caution during the appraisal cycle.</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <input 
+                                type="number"
+                                className="form-control"
+                                min="0"
+                                value={deductionDetails.written_warning}
+                                onChange={(e) => handleDetailDeductionChange('written_warning', e.target.value)}
+                                style={{ width: '80px', textAlign: 'center', fontWeight: '600', padding: '4px 6px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
+                              />
+                            </td>
                           </tr>
                         </tbody>
                       </table>
@@ -875,31 +951,24 @@ export default function AppraisalForm({ token, user }) {
                       }}
                     >
                       <div>
-                        <span style={{ fontSize: '13px', color: textMedium, fontWeight: '600' }}>Enter verified deductions score to subtract:</span>
+                        <span style={{ fontSize: '13px', color: textMedium, fontWeight: '700' }}>Calculated Total Deduction:</span>
                         {validationErrors.deductions && (
                           <span style={{ color: '#ef4444', fontSize: '11px', display: 'block', marginTop: '2px' }}>
                             {validationErrors.deductions}
                           </span>
                         )}
                       </div>
-                      <input
-                        type="number"
-                        className="form-control"
-                        min="0"
-                        value={totalDeduction}
-                        onChange={(e) => handleDeductionChange(e.target.value)}
-                        aria-label="Manual deductions score"
+                      <span 
                         style={{ 
-                          width: '90px', 
-                          textAlign: 'center', 
-                          fontWeight: '700', 
-                          fontSize: '14px', 
-                          borderColor: validationErrors.deductions ? '#ef4444' : '#f59e0b',
-                          color: '#000000',
-                          backgroundColor: '#ffffff'
+                          fontSize: '22px', 
+                          fontWeight: '800', 
+                          color: '#ef4444', 
+                          fontFamily: 'Outfit',
+                          marginRight: '16px'
                         }}
-                        required
-                      />
+                      >
+                        -{totalDeduction}
+                      </span>
                     </div>
                   </div>
 
@@ -1012,6 +1081,7 @@ export default function AppraisalForm({ token, user }) {
                   <table className="data-table" style={{ fontSize: '13px' }}>
                     <thead>
                       <tr style={{ backgroundColor: '#f8fafc' }}>
+                        <th style={{ color: textDark }}>ID</th>
                         <th style={{ color: textDark }}>Submission Date</th>
                         <th style={{ color: textDark }}>Period</th>
                         <th style={{ textAlign: 'center', color: textDark }}>Perf. Score</th>
@@ -1025,6 +1095,7 @@ export default function AppraisalForm({ token, user }) {
                     <tbody>
                       {mySubmissions.map((sub) => (
                         <tr key={sub.id} style={{ borderBottom: `1px solid ${borderLight}` }}>
+                          <td style={{ fontWeight: '600', color: textDark }}>{sub.id}</td>
                           <td style={{ color: textDark }}>{new Date(sub.submitted_date).toLocaleDateString()}</td>
                           <td style={{ color: textDark }}>{sub.assignment_period}</td>
                           <td style={{ textAlign: 'center', color: textDark }}>{sub.performance_score}</td>
@@ -1034,7 +1105,10 @@ export default function AppraisalForm({ token, user }) {
                           <td style={{ textAlign: 'center', fontWeight: '700', color: primaryBlue }}>{sub.final_score}</td>
                           <td>
                             <span className={`rating-badge ${getRatingBadgeClass(sub.rating)}`}>
-                              {sub.rating ? sub.rating.split(' ')[0] : ''}
+                              {sub.rating ? (() => {
+                                const match = sub.rating.match(/\(([^)]+)\)/);
+                                return match ? match[1] : sub.rating;
+                              })() : ''}
                             </span>
                           </td>
                           <td>

@@ -191,7 +191,11 @@ export default function AppraisalReports({ token }) {
           <label className="form-label">Rating</label>
           <select className="form-control" value={ratingFilter} onChange={(e) => setRatingFilter(e.target.value)}>
             <option value="">All Ratings</option>
-            {ratings.map(r => <option key={r} value={r}>{r}</option>)}
+            {ratings.map(r => {
+              const match = r.match(/\(([^)]+)\)/);
+              const label = match ? match[1] : r;
+              return <option key={r} value={r}>{label}</option>;
+            })}
           </select>
         </div>
 
@@ -248,7 +252,10 @@ export default function AppraisalReports({ token }) {
                   <td style={{ textAlign: 'center', fontWeight: '600', color: 'var(--accent)' }}>{r.final_score}</td>
                   <td>
                     <span className={`rating-badge ${getRatingClass(r.rating)}`}>
-                      {r.rating ? r.rating.split(' ')[0] : ''} 
+                      {r.rating ? (() => {
+                        const match = r.rating.match(/\(([^)]+)\)/);
+                        return match ? match[1] : r.rating;
+                      })() : ''} 
                     </span>
                   </td>
                   <td style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
