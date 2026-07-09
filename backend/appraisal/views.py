@@ -115,7 +115,17 @@ class EmployeeAutoFetchView(APIView):
                 return Response({"error": "Employee is inactive"}, status=status.HTTP_400_BAD_REQUEST)
             
             serializer = EmployeeSerializer(employee)
-            return Response(serializer.data)
+            department = employee.department
+            total_active = Employee.objects.filter(department=department, status='Active').count()
+            existing_ab = Appraisal.objects.filter(
+                department=department,
+                rating__in=['Outstanding (A)', 'Very Good (B)']
+            ).count()
+            
+            data = serializer.data
+            data['department_total_active'] = total_active
+            data['department_existing_ab'] = existing_ab
+            return Response(data)
         except Employee.DoesNotExist:
             return Response({"error": f"Employee with code '{code}' not found in master database."}, status=status.HTTP_404_NOT_FOUND)
 

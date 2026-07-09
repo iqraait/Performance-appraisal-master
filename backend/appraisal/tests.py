@@ -191,3 +191,108 @@ class AppraisalAPIPermissionTests(APITestCase):
         response = self.client.get(f"{self.appraisal_url}?employee_code=EMP100")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
+
+
+class AppraisalDepartmentValidationTests(APITestCase):
+    def setUp(self):
+        # Create an admin user
+        self.admin_user = User.objects.create_superuser('admin', 'admin@test.com', 'adminpass')
+        self.appraisal_url = reverse('appraisal-list')
+
+        # Create active employees in "Engineering" (2 staff)
+        self.emp1 = Employee.objects.create(
+            employee_code="EMP101",
+            name="Alice",
+            department="Engineering",
+            designation="Developer",
+            date_of_joining=datetime.date(2024, 1, 1),
+            assignment_period="Annual",
+            status="Active"
+        )
+        self.emp2 = Employee.objects.create(
+            employee_code="EMP102",
+            name="Bob",
+            department="Engineering",
+            designation="Developer",
+            date_of_joining=datetime.date(2024, 1, 1),
+            assignment_period="Annual",
+            status="Active"
+        )
+
+        # Create active employee in "Marketing" (1 staff)
+        self.emp3 = Employee.objects.create(
+            employee_code="EMP103",
+            name="Charlie",
+            department="Marketing",
+            designation="Designer",
+            date_of_joining=datetime.date(2024, 1, 1),
+            assignment_period="Annual",
+            status="Active"
+        )
+
+    def test_single_staff_allowed_ab(self):
+        """If a department has 1 active staff, they are allowed to receive Grade A/B (limit is max(1, 1//2) = 1)"""
+        data = {
+            "employee_code": "EMP103",
+            "employee_name": "Charlie",
+            "department": "Marketing",
+            "designation": "Designer",
+            "date_of_joining": "2024-01-01",
+            "assignment_period": "Annual",
+            "job_competence": 20,
+            "productivity_responsibility": 20,
+            "communication_teamwork": 20,
+            "professionalism_discipline": 20,
+            "initiative_improvement": 20,
+            "total_deduction": 0
+        }
+        response = self.client.post(self.appraisal_url, data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_two_staff_only_one_allowed_ab(self):
+        """If a department has 2 active staff, only 1 is allowed to receive Grade A/B (limit is max(1, 2//2) = 1)"""
+        # Submit first one as A (Score 100)
+        data1 = {
+            "employee_code": "EMP101",
+            "employee_name": "Alice",
+            "department": "Engineering",
+            "designation": "Developer",
+            "date_of_joining": "2024-01-01",
+            "assignment_period": "Annual",
+            "job_competence": 20,
+            "productivity_responsibility": 20,
+            "communication_teamwork": 20,
+            "professionalism_discipline": 20,
+            "initiative_improvement": 20,
+            "total_deduction": 0
+        }
+        response1 = self.client.post(self.appraisal_url, data1)
+        self.assertEqual(response1.status_code, status.HTTP_201_CREATED)
+
+        # Submit second one as A (Score 100) - Should fail
+        data2 = {
+            "employee_code": "EMP102",
+            "employee_name": "Bob",
+            "department": "Engineering",
+            "designation": "Developer",
+            "date_of_joining": "2024-01-01",
+            "assignment_period": "Annual",
+            "job_competence": 20,
+            "productivity_responsibility": 20,
+            "communication_teamwork": 20,
+            "professionalism_discipline": 20,
+            "initiative_improvement": 20,
+            "total_deduction": 0
+        }
+        response2 = self.client.post(self.appraisal_url, data2)
+        self.assertEqual(response2.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("already assessed", response2.data['non_field_errors'][0])
+
+        # Try submitting second one as C (Score 70) - Should succeed
+        data2["job_competence"] = 14
+        data2["productivity_responsibility"] = 14
+        data2["communication_teamwork"] = 14
+        data2["professionalism_discipline"] = 14
+        data2["initiative_improvement"] = 14
+        response3 = self.client.post(self.appraisal_url, data2)
+        self.assertEqual(response3.status_code, status.HTTP_201_CREATED)

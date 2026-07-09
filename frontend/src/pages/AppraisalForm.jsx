@@ -65,6 +65,13 @@ export default function AppraisalForm({ token, user }) {
   // Validation errors
   const [validationErrors, setValidationErrors] = useState({});
 
+  // Department active staff and A/B stats
+  const [departmentStats, setDepartmentStats] = useState({
+    activeStaff: 0,
+    existingAB: 0,
+    originalAppraisalRating: null
+  });
+
   // Editing state
   const [editingAppraisalId, setEditingAppraisalId] = useState(null);
   
@@ -109,6 +116,13 @@ export default function AppraisalForm({ token, user }) {
         setDesignation(data.designation || '');
         setDateOfJoining(data.date_of_joining || '');
         setAssignmentPeriod(data.assignment_period || 'Annual');
+        
+        setDepartmentStats({
+          activeStaff: data.department_total_active || 0,
+          existingAB: data.department_existing_ab || 0,
+          originalAppraisalRating: null
+        });
+        
         triggerToast('Employee details fetched successfully!');
         fetchMySubmissions(code);
         setValidationErrors(prev => ({ ...prev, employee: null }));
@@ -211,15 +225,32 @@ export default function AppraisalForm({ token, user }) {
       isValid = false;
     }
 
+    // Check department-wise A/B grade limit
+    const ratingVal = getRatingText(performanceTotal - totalDeduction);
+    const isCurrentRatingAB = ratingVal.includes('(A)') || ratingVal.includes('(B)');
+    if (isCurrentRatingAB && departmentStats.activeStaff > 0) {
+      const originalIsAB = departmentStats.originalAppraisalRating && 
+        (departmentStats.originalAppraisalRating.includes('(A)') || departmentStats.originalAppraisalRating.includes('(B)'));
+      const adjustedExistingAB = originalIsAB ? departmentStats.existingAB - 1 : departmentStats.existingAB;
+      const maxAllowedAB = Math.max(1, Math.floor(departmentStats.activeStaff * 0.5));
+      
+      if (adjustedExistingAB >= maxAllowedAB) {
+        errors.ratingLimit = `Department Grade Limit Exceeded: Only ${maxAllowedAB} out of ${departmentStats.activeStaff} active staff in '${department}' can receive Grade A or B. Already assigned: ${adjustedExistingAB}. Please assign another grade.`;
+        isValid = false;
+      }
+    }
+
     setValidationErrors(errors);
-    return isValid;
+    return { isValid, errors };
   };
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
 
-    if (!validateForm()) {
-      triggerToast('Please correct validation errors on the form.', 'error');
+    const { isValid, errors } = validateForm();
+    if (!isValid) {
+      const errMsg = errors.ratingLimit || 'Please correct validation errors on the form.';
+      triggerToast(errMsg, 'error');
       return;
     }
 
@@ -279,9 +310,24 @@ export default function AppraisalForm({ token, user }) {
         setEditingAppraisalId(null);
         
         fetchMySubmissions(employeeCode);
+        fetchEmployeeDetails(employeeCode);
         setActiveTab('list');
       } else {
-        triggerToast(result.detail || 'Failed to submit form', 'error');
+        let errMsg = 'Failed to submit form';
+        if (result.non_field_errors && result.non_field_errors.length > 0) {
+          errMsg = result.non_field_errors[0];
+        } else if (result.detail) {
+          errMsg = result.detail;
+        } else if (result.error) {
+          errMsg = result.error;
+        } else {
+          const keys = Object.keys(result);
+          if (keys.length > 0) {
+            const firstErr = result[keys[0]];
+            errMsg = Array.isArray(firstErr) ? `${keys[0]}: ${firstErr[0]}` : `${keys[0]}: ${firstErr}`;
+          }
+        }
+        triggerToast(errMsg, 'error');
       }
     } catch (err) {
       triggerToast('Network error submitting appraisal.', 'error');
@@ -290,7 +336,7 @@ export default function AppraisalForm({ token, user }) {
     }
   };
 
-  const handleEditDraft = (appraisal) => {
+  const handleEditDraft = async (appraisal) => {
     if (appraisal.status === 'Approved') {
       triggerToast('Approved appraisals are locked and cannot be edited.', 'error');
       return;
@@ -317,6 +363,20 @@ export default function AppraisalForm({ token, user }) {
     setDesignation(appraisal.designation);
     setDateOfJoining(appraisal.date_of_joining);
     setAssignmentPeriod(appraisal.assignment_period);
+
+    try {
+      const response = await fetch(`http://${window.location.hostname}:8000/api/employees/fetch/?code=${appraisal.employee_code}`);
+      if (response.ok) {
+        const data = await response.json();
+        setDepartmentStats({
+          activeStaff: data.department_total_active || 0,
+          existingAB: data.department_existing_ab || 0,
+          originalAppraisalRating: appraisal.rating
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching department stats for draft edit', err);
+    }
     
     setActiveTab('form');
     triggerToast('Draft appraisal loaded! Make changes and submit.');
@@ -426,6 +486,17 @@ export default function AppraisalForm({ token, user }) {
   const borderLight = 'var(--border-color)';
   const textDark = 'var(--text-main)';
   const textMedium = 'var(--text-muted)';
+
+  const ratingText = getRatingText(finalScore);
+  const isCurrentRatingAB = ratingText.includes('(A)') || ratingText.includes('(B)');
+  
+  const originalIsAB = departmentStats.originalAppraisalRating && 
+    (departmentStats.originalAppraisalRating.includes('(A)') || departmentStats.originalAppraisalRating.includes('(B)'));
+  
+  const adjustedExistingAB = originalIsAB ? departmentStats.existingAB - 1 : departmentStats.existingAB;
+  const maxAllowedAB = Math.max(1, Math.floor(departmentStats.activeStaff * 0.5));
+  
+  const isLimitExceeded = isCurrentRatingAB && (departmentStats.activeStaff > 0) && (adjustedExistingAB >= maxAllowedAB);
 
   return (
     <div style={{ maxWidth: '1020px', margin: '0 auto', fontFamily: '"Inter", sans-serif', paddingBottom: '40px', transition: 'all 0.3s ease' }}>
@@ -714,6 +785,23 @@ export default function AppraisalForm({ token, user }) {
                           <span style={{ fontSize: '14px', fontWeight: '700', color: textDark }}>Final Score:</span>
                           <span style={{ fontSize: '28px', fontWeight: '800', color: primaryBlue, fontFamily: 'Outfit' }}>{finalScore}</span>
                         </div>
+
+                        {departmentStats.activeStaff > 0 && (
+                          <div style={{ borderTop: `1px dashed ${borderLight}`, paddingTop: '12px', marginTop: '12px', fontSize: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', color: textMedium, marginBottom: '4px' }}>
+                              <span>Dept Active Staff:</span>
+                              <strong style={{ color: textDark }}>{departmentStats.activeStaff}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', color: textMedium, marginBottom: '4px' }}>
+                              <span>Dept Grade A/B Limit:</span>
+                              <strong style={{ color: textDark }}>{maxAllowedAB}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', color: textMedium }}>
+                              <span>Dept Existing A/B:</span>
+                              <strong style={{ color: textDark }}>{adjustedExistingAB}</strong>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div 
@@ -729,8 +817,32 @@ export default function AppraisalForm({ token, user }) {
                       >
                         <span style={{ fontSize: '11px', textTransform: 'uppercase', color: primaryBlue, fontWeight: '700', letterSpacing: '0.05em' }}>Derived Grade</span>
                         <div style={{ fontSize: '16px', fontWeight: '700', color: textDark, marginTop: '2px' }}>
-                          {getRatingText(finalScore)}
+                          {ratingText}
                         </div>
+
+                        {isLimitExceeded && (
+                          <div 
+                            style={{ 
+                              marginTop: '12px', 
+                              padding: '12px', 
+                              borderRadius: '6px', 
+                              backgroundColor: '#fee2e2', 
+                              border: '1px solid #fca5a5',
+                              color: '#b91c1c',
+                              fontSize: '11px',
+                              textAlign: 'left',
+                              display: 'flex',
+                              gap: '6px',
+                              alignItems: 'flex-start'
+                            }}
+                          >
+                            <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '1px', color: '#dc2626' }} />
+                            <div>
+                              <strong style={{ display: 'block', marginBottom: '2px' }}>Grade Limit Exceeded</strong>
+                              Only 50% of staff in <strong>{department}</strong> can receive Grade A or B (Max allowed: <strong>{maxAllowedAB}</strong> out of <strong>{departmentStats.activeStaff}</strong> active staff). Already assigned: <strong>{adjustedExistingAB}</strong>. Please assign to another grade.
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
