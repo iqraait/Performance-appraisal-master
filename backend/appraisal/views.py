@@ -53,7 +53,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         ws = wb.active
         ws.title = "Employee Master"
 
-        headers = ["Employee Code", "Employee Name", "Department / Location", "Designation", "Date of Joining", "Assignment Period", "Status"]
+        headers = ["Employee Code", "Employee Name", "Department", "Location", "Designation", "Date of Joining", "Assignment Period", "Status"]
         for col_num, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col_num)
             cell.value = header
@@ -65,10 +65,11 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             ws.cell(row=row_num, column=1, value=obj.employee_code)
             ws.cell(row=row_num, column=2, value=obj.name)
             ws.cell(row=row_num, column=3, value=obj.department)
-            ws.cell(row=row_num, column=4, value=obj.designation)
-            ws.cell(row=row_num, column=5, value=obj.date_of_joining.strftime('%Y-%m-%d') if obj.date_of_joining else '')
-            ws.cell(row=row_num, column=6, value=obj.assignment_period)
-            ws.cell(row=row_num, column=7, value=obj.status)
+            ws.cell(row=row_num, column=4, value=obj.location)
+            ws.cell(row=row_num, column=5, value=obj.designation)
+            ws.cell(row=row_num, column=6, value=obj.date_of_joining.strftime('%Y-%m-%d') if obj.date_of_joining else '')
+            ws.cell(row=row_num, column=7, value=obj.assignment_period)
+            ws.cell(row=row_num, column=8, value=obj.status)
 
         for col in ws.columns:
             max_len = max(len(str(cell.value or '')) for cell in col)
@@ -82,12 +83,15 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         dept = self.request.query_params.get('department')
+        location_param = self.request.query_params.get('location')
         desig = self.request.query_params.get('designation')
         status_param = self.request.query_params.get('status')
         search = self.request.query_params.get('search')
 
         if dept:
             queryset = queryset.filter(department__icontains=dept)
+        if location_param:
+            queryset = queryset.filter(location__icontains=location_param)
         if desig:
             queryset = queryset.filter(designation__icontains=desig)
         if status_param:
@@ -157,7 +161,8 @@ class ExcelImportView(APIView):
         col_mapping = {
             'employee_code': ['employee code', 'code', 'emp code'],
             'name': ['employee name', 'name', 'emp name'],
-            'department': ['department / location', 'department/location', 'department', 'location', 'dept'],
+            'department': ['department', 'dept'],
+            'location': ['location', 'loc'],
             'designation': ['designation', 'desig', 'role'],
             'date_of_joining': ['date of joining', 'joining date', 'doj']
         }
@@ -204,6 +209,7 @@ class ExcelImportView(APIView):
                 emp_code = str(row_data[indices['employee_code']]).strip() if row_data[indices['employee_code']] else ""
                 name = str(row_data[indices['name']]).strip() if row_data[indices['name']] else ""
                 dept = str(row_data[indices['department']]).strip() if row_data[indices['department']] else ""
+                location = str(row_data[indices['location']]).strip() if row_data[indices['location']] else ""
                 desig = str(row_data[indices['designation']]).strip() if row_data[indices['designation']] else ""
                 doj_raw = row_data[indices['date_of_joining']]
             except IndexError:
@@ -265,6 +271,7 @@ class ExcelImportView(APIView):
                     employee_code=emp_code,
                     name=name,
                     department=dept,
+                    location=location,
                     designation=desig,
                     date_of_joining=doj,
                     assignment_period='Annual',  # Default; select manually during appraisal
@@ -320,6 +327,7 @@ class AppraisalViewSet(viewsets.ModelViewSet):
         else:
             # Query Filters
             dept = self.request.query_params.get('department')
+            location_param = self.request.query_params.get('location')
             desig = self.request.query_params.get('designation')
             period = self.request.query_params.get('assignment_period')
             rating = self.request.query_params.get('rating')
@@ -331,6 +339,8 @@ class AppraisalViewSet(viewsets.ModelViewSet):
 
             if dept:
                 queryset = queryset.filter(department__icontains=dept)
+            if location_param:
+                queryset = queryset.filter(location__icontains=location_param)
             if desig:
                 queryset = queryset.filter(designation__icontains=desig)
             if period:
@@ -388,7 +398,7 @@ class ExcelExportView(APIView):
 
         # Headers
         headers = [
-            "Employee Code", "Employee Name", "Department", "Designation", 
+            "Employee Code", "Employee Name", "Department", "Location", "Designation", 
             "Date of Joining", "Assignment Period", "Performance Score", 
             "Deduction Score", "Final Score", "Rating", "Submitted Date"
         ]
@@ -406,14 +416,15 @@ class ExcelExportView(APIView):
             ws.cell(row=row_num, column=1, value=obj.employee_code)
             ws.cell(row=row_num, column=2, value=obj.employee_name)
             ws.cell(row=row_num, column=3, value=obj.department)
-            ws.cell(row=row_num, column=4, value=obj.designation)
-            ws.cell(row=row_num, column=5, value=obj.date_of_joining.strftime('%Y-%m-%d') if obj.date_of_joining else '')
-            ws.cell(row=row_num, column=6, value=obj.assignment_period)
-            ws.cell(row=row_num, column=7, value=obj.performance_score)
-            ws.cell(row=row_num, column=8, value=obj.total_deduction)
-            ws.cell(row=row_num, column=9, value=obj.final_score)
-            ws.cell(row=row_num, column=10, value=obj.rating)
-            ws.cell(row=row_num, column=11, value=obj.submitted_date.strftime('%Y-%m-%d %H:%M') if obj.submitted_date else '')
+            ws.cell(row=row_num, column=4, value=obj.location)
+            ws.cell(row=row_num, column=5, value=obj.designation)
+            ws.cell(row=row_num, column=6, value=obj.date_of_joining.strftime('%Y-%m-%d') if obj.date_of_joining else '')
+            ws.cell(row=row_num, column=7, value=obj.assignment_period)
+            ws.cell(row=row_num, column=8, value=obj.performance_score)
+            ws.cell(row=row_num, column=9, value=obj.total_deduction)
+            ws.cell(row=row_num, column=10, value=obj.final_score)
+            ws.cell(row=row_num, column=11, value=obj.rating)
+            ws.cell(row=row_num, column=12, value=obj.submitted_date.strftime('%Y-%m-%d %H:%M') if obj.submitted_date else '')
 
         # Adjust column widths
         for col in ws.columns:

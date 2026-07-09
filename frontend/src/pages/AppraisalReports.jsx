@@ -21,6 +21,7 @@ export default function AppraisalReports({ token }) {
   const [codeFilter, setCodeFilter] = useState('');
   const [nameFilter, setNameFilter] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
+  const [locFilter, setLocFilter] = useState('');
   const [desigFilter, setDesigFilter] = useState('');
   const [periodFilter, setPeriodFilter] = useState('');
   const [ratingFilter, setRatingFilter] = useState('');
@@ -29,6 +30,7 @@ export default function AppraisalReports({ token }) {
 
   // Dropdown list sets
   const [depts, setDepts] = useState([]);
+  const [locs, setLocs] = useState([]);
   const [desigs, setDesigs] = useState([]);
   const [periods, setPeriods] = useState([]);
   const [ratings, setRatings] = useState([]);
@@ -43,7 +45,7 @@ export default function AppraisalReports({ token }) {
   };
 
   const getQueryString = () => {
-    return `search=${search}&code=${codeFilter}&name=${nameFilter}&department=${deptFilter}&designation=${desigFilter}&assignment_period=${periodFilter}&rating=${ratingFilter}&start_date=${startDate}&end_date=${endDate}`;
+    return `search=${search}&code=${codeFilter}&name=${nameFilter}&department=${deptFilter}&location=${locFilter}&designation=${desigFilter}&assignment_period=${periodFilter}&rating=${ratingFilter}&start_date=${startDate}&end_date=${endDate}`;
   };
 
   const fetchReports = async () => {
@@ -59,10 +61,12 @@ export default function AppraisalReports({ token }) {
         // Derive unique dropdown sets from the full reports database
         if (depts.length === 0) {
           const uniqueDepts = [...new Set(data.map(r => r.department))].filter(Boolean);
+          const uniqueLocs = [...new Set(data.map(r => r.location))].filter(Boolean);
           const uniqueDesigs = [...new Set(data.map(r => r.designation))].filter(Boolean);
           const uniquePeriods = [...new Set(data.map(r => r.assignment_period))].filter(Boolean);
           const uniqueRatings = [...new Set(data.map(r => r.rating))].filter(Boolean);
           setDepts(uniqueDepts);
+          setLocs(uniqueLocs);
           setDesigs(uniqueDesigs);
           setPeriods(uniquePeriods);
           setRatings(uniqueRatings);
@@ -79,7 +83,7 @@ export default function AppraisalReports({ token }) {
 
   useEffect(() => {
     fetchReports();
-  }, [search, codeFilter, nameFilter, deptFilter, desigFilter, periodFilter, ratingFilter, startDate, endDate]);
+  }, [search, codeFilter, nameFilter, deptFilter, locFilter, desigFilter, periodFilter, ratingFilter, startDate, endDate]);
 
   const handleExportExcel = () => {
     const exportUrl = `http://${window.location.hostname}:8000/api/appraisals/export-excel/?${getQueryString()}`;
@@ -172,6 +176,14 @@ export default function AppraisalReports({ token }) {
         </div>
 
         <div className="filter-item">
+          <label className="form-label">Location</label>
+          <select className="form-control" value={locFilter} onChange={(e) => setLocFilter(e.target.value)}>
+            <option value="">All Locations</option>
+            {locs.map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </div>
+
+        <div className="filter-item">
           <label className="form-label">Designation</label>
           <select className="form-control" value={desigFilter} onChange={(e) => setDesigFilter(e.target.value)}>
             <option value="">All Designations</option>
@@ -227,6 +239,7 @@ export default function AppraisalReports({ token }) {
                 <th>Code</th>
                 <th>Employee Name</th>
                 <th>Department</th>
+                <th>Location</th>
                 <th>Designation</th>
                 <th>Period</th>
                 <th style={{ textAlign: 'center' }}>Perf. Score</th>
@@ -243,6 +256,7 @@ export default function AppraisalReports({ token }) {
                   <td style={{ fontWeight: '600', color: 'var(--primary)' }}>{r.employee_code}</td>
                   <td style={{ fontWeight: '500' }}>{r.employee_name}</td>
                   <td>{r.department}</td>
+                  <td>{r.location}</td>
                   <td>{r.designation}</td>
                   <td>{r.assignment_period}</td>
                   <td style={{ textAlign: 'center' }}>{r.performance_score}</td>
@@ -312,7 +326,8 @@ export default function AppraisalReports({ token }) {
               <div className="grid-cols-2" style={{ gap: '16px', marginBottom: '24px', fontSize: '14px', padding: '16px', backgroundColor: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
                 <div>Employee Code: <strong>{selectedAppraisal.employee_code}</strong></div>
                 <div>Employee Name: <strong>{selectedAppraisal.employee_name}</strong></div>
-                <div>Department / Location: <strong>{selectedAppraisal.department}</strong></div>
+                <div>Department: <strong>{selectedAppraisal.department}</strong></div>
+                <div>Location: <strong>{selectedAppraisal.location || ''}</strong></div>
                 <div>Designation: <strong>{selectedAppraisal.designation}</strong></div>
                 <div>Date of Joining: <strong>{selectedAppraisal.date_of_joining}</strong></div>
                 <div>Assignment Period: <strong>{selectedAppraisal.assignment_period}</strong></div>

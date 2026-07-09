@@ -17,11 +17,13 @@ export default function EmployeeMaster({ token }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
+  const [locFilter, setLocFilter] = useState('');
   const [desigFilter, setDesigFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   
-  // Available departments/designations for filter dropdowns
+  // Available departments/locations/designations for filter dropdowns
   const [depts, setDepts] = useState([]);
+  const [locs, setLocs] = useState([]);
   const [desigs, setDesigs] = useState([]);
 
   // Modals state
@@ -37,6 +39,7 @@ export default function EmployeeMaster({ token }) {
     employee_code: '',
     name: '',
     department: '',
+    location: '',
     designation: '',
     date_of_joining: '',
     assignment_period: 'Annual',
@@ -60,7 +63,7 @@ export default function EmployeeMaster({ token }) {
   const fetchEmployees = async () => {
     setLoading(true);
     try {
-      let url = `http://${window.location.hostname}:8000/api/employees/?search=${search}&department=${deptFilter}&designation=${desigFilter}&status=${statusFilter}`;
+      let url = `http://${window.location.hostname}:8000/api/employees/?search=${search}&department=${deptFilter}&location=${locFilter}&designation=${desigFilter}&status=${statusFilter}`;
       const response = await fetch(url, {
         headers: { 'Authorization': `Token ${token}` }
       });
@@ -71,8 +74,10 @@ export default function EmployeeMaster({ token }) {
         // Populate filter options if empty
         if (depts.length === 0) {
           const uniqueDepts = [...new Set(data.map(e => e.department))].filter(Boolean);
+          const uniqueLocs = [...new Set(data.map(e => e.location))].filter(Boolean);
           const uniqueDesigs = [...new Set(data.map(e => e.designation))].filter(Boolean);
           setDepts(uniqueDepts);
+          setLocs(uniqueLocs);
           setDesigs(uniqueDesigs);
         }
       }
@@ -85,10 +90,10 @@ export default function EmployeeMaster({ token }) {
 
   useEffect(() => {
     fetchEmployees();
-  }, [search, deptFilter, desigFilter, statusFilter]);
+  }, [search, deptFilter, locFilter, desigFilter, statusFilter]);
 
   const handleExportEmployees = () => {
-    const exportUrl = `http://${window.location.hostname}:8000/api/employees/export-excel/?search=${search}&department=${deptFilter}&designation=${desigFilter}&status=${statusFilter}`;
+    const exportUrl = `http://${window.location.hostname}:8000/api/employees/export-excel/?search=${search}&department=${deptFilter}&location=${locFilter}&designation=${desigFilter}&status=${statusFilter}`;
     triggerToast('Preparing Excel export...');
     fetch(exportUrl, {
       headers: { 'Authorization': `Token ${token}` }
@@ -143,6 +148,7 @@ export default function EmployeeMaster({ token }) {
       employee_code: emp.employee_code,
       name: emp.name,
       department: emp.department,
+      location: emp.location || '',
       designation: emp.designation,
       date_of_joining: emp.date_of_joining,
       assignment_period: emp.assignment_period,
@@ -203,6 +209,7 @@ export default function EmployeeMaster({ token }) {
       employee_code: '',
       name: '',
       department: '',
+      location: '',
       designation: '',
       date_of_joining: '',
       assignment_period: 'Annual',
@@ -336,6 +343,14 @@ export default function EmployeeMaster({ token }) {
         </div>
 
         <div className="filter-item">
+          <label className="form-label">Location</label>
+          <select className="form-control" value={locFilter} onChange={(e) => setLocFilter(e.target.value)}>
+            <option value="">All Locations</option>
+            {locs.map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </div>
+
+        <div className="filter-item">
           <label className="form-label">Designation</label>
           <select className="form-control" value={desigFilter} onChange={(e) => setDesigFilter(e.target.value)}>
             <option value="">All Designations</option>
@@ -369,7 +384,8 @@ export default function EmployeeMaster({ token }) {
               <tr>
                 <th>Code</th>
                 <th>Employee Name</th>
-                <th>Department / Location</th>
+                <th>Department</th>
+                <th>Location</th>
                 <th>Designation</th>
                 <th>Date of Joining</th>
                 <th>Status</th>
@@ -382,6 +398,7 @@ export default function EmployeeMaster({ token }) {
                   <td style={{ fontWeight: '600', color: 'var(--primary)' }}>{emp.employee_code}</td>
                   <td>{emp.name}</td>
                   <td>{emp.department}</td>
+                  <td>{emp.location}</td>
                   <td>{emp.designation}</td>
                   <td>{emp.date_of_joining}</td>
                   <td>
@@ -468,14 +485,25 @@ export default function EmployeeMaster({ token }) {
                 />
               </div>
 
-              <div className="grid-cols-2">
+              <div className="grid-cols-3">
                 <div className="form-group">
-                  <label className="form-label">Department / Location</label>
+                  <label className="form-label">Department</label>
                   <input
                     type="text"
                     name="department"
                     className="form-control"
                     value={formData.department}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Location</label>
+                  <input
+                    type="text"
+                    name="location"
+                    className="form-control"
+                    value={formData.location}
                     onChange={handleInputChange}
                     required
                   />
@@ -567,14 +595,25 @@ export default function EmployeeMaster({ token }) {
                 />
               </div>
 
-              <div className="grid-cols-2">
+              <div className="grid-cols-3">
                 <div className="form-group">
-                  <label className="form-label">Department / Location</label>
+                  <label className="form-label">Department</label>
                   <input
                     type="text"
                     name="department"
                     className="form-control"
                     value={formData.department}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Location</label>
+                  <input
+                    type="text"
+                    name="location"
+                    className="form-control"
+                    value={formData.location}
                     onChange={handleInputChange}
                     required
                   />
@@ -656,7 +695,7 @@ export default function EmployeeMaster({ token }) {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'left' }}>
-                  Required Columns: <strong>Employee Code, Employee Name, Department / Location, Designation, Date of Joining</strong>
+                  Required Columns: <strong>Employee Code, Employee Name, Department, Location, Designation, Date of Joining</strong>
                 </div>
                 <button type="submit" className="btn btn-primary btn-sm" disabled={importLoading}>
                   {importLoading ? 'Importing...' : 'Upload File'}

@@ -33,6 +33,7 @@ export default function AppraisalForm({ token, user }) {
   const [employeeCode, setEmployeeCode] = useState(initialCode);
   const [employeeName, setEmployeeName] = useState('');
   const [department, setDepartment] = useState('');
+  const [location, setLocation] = useState('');
   const [designation, setDesignation] = useState('');
   const [dateOfJoining, setDateOfJoining] = useState('');
   const [assignmentPeriod, setAssignmentPeriod] = useState('Annual');
@@ -113,6 +114,7 @@ export default function AppraisalForm({ token, user }) {
       if (response.ok) {
         setEmployeeName(data.name || '');
         setDepartment(data.department || '');
+        setLocation(data.location || '');
         setDesignation(data.designation || '');
         setDateOfJoining(data.date_of_joining || '');
         setAssignmentPeriod(data.assignment_period || 'Annual');
@@ -260,6 +262,7 @@ export default function AppraisalForm({ token, user }) {
         employee_code: employeeCode,
         employee_name: employeeName,
         department,
+        location,
         designation,
         date_of_joining: dateOfJoining,
         assignment_period: assignmentPeriod,
@@ -360,6 +363,7 @@ export default function AppraisalForm({ token, user }) {
     
     setEmployeeName(appraisal.employee_name);
     setDepartment(appraisal.department);
+    setLocation(appraisal.location || '');
     setDesignation(appraisal.designation);
     setDateOfJoining(appraisal.date_of_joining);
     setAssignmentPeriod(appraisal.assignment_period);
@@ -432,7 +436,8 @@ export default function AppraisalForm({ token, user }) {
           <div class="grid">
             <div class="grid-cell"><strong>Employee Code:</strong> ${appraisal.employee_code}</div>
             <div class="grid-cell"><strong>Employee Name:</strong> ${appraisal.employee_name}</div>
-            <div class="grid-cell"><strong>Department/Location:</strong> ${appraisal.department}</div>
+            <div class="grid-cell"><strong>Department:</strong> ${appraisal.department}</div>
+            <div class="grid-cell"><strong>Location:</strong> ${appraisal.location || ''}</div>
             <div class="grid-cell"><strong>Designation:</strong> ${appraisal.designation}</div>
             <div class="grid-cell"><strong>Date of Joining:</strong> ${appraisal.date_of_joining}</div>
             <div class="grid-cell"><strong>Assessment Period:</strong> ${appraisal.assignment_period}</div>
@@ -695,7 +700,7 @@ export default function AppraisalForm({ token, user }) {
 
                       <div className="grid-cols-2" style={{ gap: '12px', marginBottom: '12px' }}>
                         <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label htmlFor="form_dept" className="form-label" style={{ color: textMedium, fontSize: '12px', fontWeight: '600' }}>Department / Location</label>
+                          <label htmlFor="form_dept" className="form-label" style={{ color: textMedium, fontSize: '12px', fontWeight: '600' }}>Department</label>
                           <input
                             type="text"
                             id="form_dept"
@@ -708,6 +713,21 @@ export default function AppraisalForm({ token, user }) {
                         </div>
 
                         <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label htmlFor="form_loc" className="form-label" style={{ color: textMedium, fontSize: '12px', fontWeight: '600' }}>Location</label>
+                          <input
+                            type="text"
+                            id="form_loc"
+                            className="form-control"
+                            value={location}
+                            onChange={(e) => setLocation(e.target.value)}
+                            required
+                            style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid-cols-2" style={{ gap: '12px', marginBottom: '12px' }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
                           <label htmlFor="form_desig" className="form-label" style={{ color: textMedium, fontSize: '12px', fontWeight: '600' }}>Designation</label>
                           <input
                             type="text"
@@ -719,9 +739,7 @@ export default function AppraisalForm({ token, user }) {
                             style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
                           />
                         </div>
-                      </div>
 
-                      <div className="grid-cols-2" style={{ gap: '12px' }}>
                         <div className="form-group" style={{ marginBottom: 0 }}>
                           <label htmlFor="form_doj" className="form-label" style={{ color: textMedium, fontSize: '12px', fontWeight: '600' }}>Date of Joining</label>
                           <input
@@ -734,7 +752,9 @@ export default function AppraisalForm({ token, user }) {
                             style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
                           />
                         </div>
+                      </div>
 
+                      <div className="grid-cols-2" style={{ gap: '12px' }}>
                         <div className="form-group" style={{ marginBottom: 0 }}>
                           <label htmlFor="form_period" className="form-label" style={{ color: textMedium, fontSize: '12px', fontWeight: '600' }}>Assessment Period</label>
                           <select 
@@ -749,6 +769,9 @@ export default function AppraisalForm({ token, user }) {
                             <option value="Quarterly">Quarterly</option>
                             <option value="Monthly">Monthly</option>
                           </select>
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          {/* Balanced empty spacing */}
                         </div>
                       </div>
                     </div>
