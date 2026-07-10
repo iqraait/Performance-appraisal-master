@@ -193,17 +193,18 @@ class AppraisalAPIPermissionTests(APITestCase):
         self.assertEqual(len(response.data), 1)
 
 
-class AppraisalDepartmentValidationTests(APITestCase):
+class AppraisalLocationValidationTests(APITestCase):
     def setUp(self):
         # Create an admin user
         self.admin_user = User.objects.create_superuser('admin', 'admin@test.com', 'adminpass')
         self.appraisal_url = reverse('appraisal-list')
 
-        # Create active employees in "Engineering" (2 staff)
+        # Create active employees in "Kozhikode" location (2 staff)
         self.emp1 = Employee.objects.create(
             employee_code="EMP101",
             name="Alice",
             department="Engineering",
+            location="Kozhikode",
             designation="Developer",
             date_of_joining=datetime.date(2024, 1, 1),
             assignment_period="Annual",
@@ -213,17 +214,19 @@ class AppraisalDepartmentValidationTests(APITestCase):
             employee_code="EMP102",
             name="Bob",
             department="Engineering",
+            location="Kozhikode",
             designation="Developer",
             date_of_joining=datetime.date(2024, 1, 1),
             assignment_period="Annual",
             status="Active"
         )
 
-        # Create active employee in "Marketing" (1 staff)
+        # Create active employee in "Malappuram" location (1 staff)
         self.emp3 = Employee.objects.create(
             employee_code="EMP103",
             name="Charlie",
             department="Marketing",
+            location="Malappuram",
             designation="Designer",
             date_of_joining=datetime.date(2024, 1, 1),
             assignment_period="Annual",
@@ -231,11 +234,12 @@ class AppraisalDepartmentValidationTests(APITestCase):
         )
 
     def test_single_staff_allowed_ab(self):
-        """If a department has 1 active staff, they are allowed to receive Grade A/B (limit is max(1, 1//2) = 1)"""
+        """If a location has 1 active staff, they are allowed to receive Grade A/B (limit is max(1, 1//2) = 1)"""
         data = {
             "employee_code": "EMP103",
             "employee_name": "Charlie",
             "department": "Marketing",
+            "location": "Malappuram",
             "designation": "Designer",
             "date_of_joining": "2024-01-01",
             "assignment_period": "Annual",
@@ -250,12 +254,13 @@ class AppraisalDepartmentValidationTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_two_staff_only_one_allowed_ab(self):
-        """If a department has 2 active staff, only 1 is allowed to receive Grade A/B (limit is max(1, 2//2) = 1)"""
+        """If a location has 2 active staff, only 1 is allowed to receive Grade A/B (limit is max(1, 2//2) = 1)"""
         # Submit first one as A (Score 100)
         data1 = {
             "employee_code": "EMP101",
             "employee_name": "Alice",
             "department": "Engineering",
+            "location": "Kozhikode",
             "designation": "Developer",
             "date_of_joining": "2024-01-01",
             "assignment_period": "Annual",
@@ -274,6 +279,7 @@ class AppraisalDepartmentValidationTests(APITestCase):
             "employee_code": "EMP102",
             "employee_name": "Bob",
             "department": "Engineering",
+            "location": "Kozhikode",
             "designation": "Developer",
             "date_of_joining": "2024-01-01",
             "assignment_period": "Annual",

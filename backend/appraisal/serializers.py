@@ -71,19 +71,19 @@ class AppraisalSerializer(serializers.ModelSerializer):
             rating = 'Other'
 
         if rating in ['Outstanding (A)', 'Very Good (B)']:
-            department = data.get('department')
-            if not department and instance:
-                department = instance.department
+            location = data.get('location')
+            if not location and instance:
+                location = instance.location
             
-            if department:
-                total_active_staff = Employee.objects.filter(department=department, status='Active').count()
+            if location:
+                total_active_staff = Employee.objects.filter(location=location, status='Active').count()
                 if total_active_staff == 0:
-                    total_active_staff = Employee.objects.filter(department=department).count()
+                    total_active_staff = Employee.objects.filter(location=location).count()
                 
                 max_allowed_ab = max(1, total_active_staff // 2)
                 
                 existing_ab_query = Appraisal.objects.filter(
-                    department=department,
+                    location=location,
                     rating__in=['Outstanding (A)', 'Very Good (B)']
                 )
                 if instance:
@@ -93,7 +93,7 @@ class AppraisalSerializer(serializers.ModelSerializer):
                 
                 if existing_ab_count >= max_allowed_ab:
                     raise serializers.ValidationError(
-                        f"You have already assessed {existing_ab_count} of your staff in '{department}' "
+                        f"You have already assessed {existing_ab_count} of your staff in '{location}' "
                         f"to A or B (Max allowed: {max_allowed_ab} out of {total_active_staff} active staff). "
                         "Please assign to another grade."
                     )
