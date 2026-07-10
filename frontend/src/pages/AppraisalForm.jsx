@@ -234,7 +234,7 @@ export default function AppraisalForm({ token, user }) {
       const originalIsAB = locationStats.originalAppraisalRating && 
         (locationStats.originalAppraisalRating.includes('(A)') || locationStats.originalAppraisalRating.includes('(B)'));
       const adjustedExistingAB = originalIsAB ? locationStats.existingAB - 1 : locationStats.existingAB;
-      const maxAllowedAB = Math.max(1, Math.floor(locationStats.activeStaff * 0.5));
+      const maxAllowedAB = Math.max(1, Math.ceil(locationStats.activeStaff * 0.5));
       
       if (adjustedExistingAB >= maxAllowedAB) {
         errors.ratingLimit = `Location Grade Limit Exceeded: Only ${maxAllowedAB} out of ${locationStats.activeStaff} active staff in '${location}' can receive Grade A or B. Already assigned: ${adjustedExistingAB}. Please assign another grade.`;
@@ -499,7 +499,7 @@ export default function AppraisalForm({ token, user }) {
     (locationStats.originalAppraisalRating.includes('(A)') || locationStats.originalAppraisalRating.includes('(B)'));
   
   const adjustedExistingAB = originalIsAB ? locationStats.existingAB - 1 : locationStats.existingAB;
-  const maxAllowedAB = Math.max(1, Math.floor(locationStats.activeStaff * 0.5));
+  const maxAllowedAB = Math.max(1, Math.ceil(locationStats.activeStaff * 0.5));
   
   const isLimitExceeded = isCurrentRatingAB && (locationStats.activeStaff > 0) && (adjustedExistingAB >= maxAllowedAB);
 

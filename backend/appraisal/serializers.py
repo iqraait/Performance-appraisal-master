@@ -80,7 +80,7 @@ class AppraisalSerializer(serializers.ModelSerializer):
                 if total_active_staff == 0:
                     total_active_staff = Employee.objects.filter(location=location).count()
                 
-                max_allowed_ab = max(1, total_active_staff // 2)
+                max_allowed_ab = max(1, (total_active_staff + 1) // 2)
                 
                 existing_ab_query = Appraisal.objects.filter(
                     location=location,
