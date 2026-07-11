@@ -13,7 +13,8 @@ import {
   Award,
   AlertTriangle,
   ChevronRight,
-  Info
+  Info,
+  ChevronDown
 } from 'lucide-react';
 
 export default function AppraisalForm({ token, user }) {
@@ -85,6 +86,16 @@ export default function AppraisalForm({ token, user }) {
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedLoc, setSelectedLoc] = useState('');
   const [selectedEmpCode, setSelectedEmpCode] = useState('');
+
+  // Search input queries for cascading dropdowns
+  const [deptQuery, setDeptQuery] = useState('');
+  const [locQuery, setLocQuery] = useState('');
+  const [empQuery, setEmpQuery] = useState('');
+
+  // Visibility states for dropdown lists
+  const [showDeptDropdown, setShowDeptDropdown] = useState(false);
+  const [showLocDropdown, setShowLocDropdown] = useState(false);
+  const [showEmpDropdown, setShowEmpDropdown] = useState(false);
   
   // Operation statuses
   const [fetching, setFetching] = useState(false);
@@ -522,12 +533,26 @@ export default function AppraisalForm({ token, user }) {
 
   // Filter lists for cascading dropdown selectors
   const departmentsList = [...new Set(allEmployees.map(e => e.department))].filter(Boolean).sort();
+  const filteredDepartmentsList = departmentsList.filter(d => 
+    d.toLowerCase().includes(deptQuery.toLowerCase())
+  );
+
   const locationsList = selectedDept
     ? [...new Set(allEmployees.filter(e => e.department === selectedDept).map(e => e.location))].filter(Boolean).sort()
     : [];
+  const filteredLocationsList = locationsList.filter(l => 
+    l.toLowerCase().includes(locQuery.toLowerCase())
+  );
+
   const filteredEmployeesList = (selectedDept && selectedLoc)
     ? allEmployees.filter(e => e.department === selectedDept && e.location === selectedLoc).sort((a, b) => String(a.employee_code).localeCompare(String(b.employee_code)))
     : [];
+  const finalEmployeesList = filteredEmployeesList.filter(emp => {
+    const code = String(emp.employee_code).toLowerCase();
+    const name = String(emp.name).toLowerCase();
+    const query = empQuery.toLowerCase();
+    return code.includes(query) || name.includes(query);
+  });
 
   const ratingText = getRatingText(finalScore);
   const isCurrentRatingAB = ratingText.includes('(A)') || ratingText.includes('(B)');
@@ -582,59 +607,215 @@ export default function AppraisalForm({ token, user }) {
               </div>
             ) : (
               <>
-                <div className="form-group" style={{ textAlign: 'left', marginBottom: 0 }}>
+                <div className="form-group" style={{ textAlign: 'left', marginBottom: 0, position: 'relative' }}>
                   <label className="form-label" style={{ color: textMedium, fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Department</label>
-                  <select
-                    className="form-control"
-                    value={selectedDept}
-                    onChange={(e) => {
-                      setSelectedDept(e.target.value);
-                      setSelectedLoc('');
-                      setSelectedEmpCode('');
-                    }}
-                    style={{ fontSize: '13px', padding: '8px 12px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
-                  >
-                    <option value="">-- Select Department --</option>
-                    {departmentsList.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Type or select department..."
+                      value={deptQuery}
+                      onChange={(e) => {
+                        setDeptQuery(e.target.value);
+                        setShowDeptDropdown(true);
+                      }}
+                      onFocus={() => setShowDeptDropdown(true)}
+                      onBlur={() => {
+                        setTimeout(() => {
+                          setDeptQuery(selectedDept || '');
+                          setShowDeptDropdown(false);
+                        }, 200);
+                      }}
+                      style={{ fontSize: '13px', padding: '8px 36px 8px 12px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
+                    />
+                    <ChevronDown size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: textMedium, pointerEvents: 'none' }} />
+                  </div>
+                  {showDeptDropdown && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      backgroundColor: '#ffffff',
+                      border: `1px solid ${borderLight}`,
+                      borderRadius: '6px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      zIndex: 1000,
+                      marginTop: '4px'
+                    }}>
+                      {filteredDepartmentsList.length > 0 ? (
+                        filteredDepartmentsList.map(d => (
+                          <div
+                            key={d}
+                            onMouseDown={() => {
+                              setSelectedDept(d);
+                              setDeptQuery(d);
+                              setShowDeptDropdown(false);
+                              setSelectedLoc('');
+                              setLocQuery('');
+                              setSelectedEmpCode('');
+                              setEmpQuery('');
+                            }}
+                            style={{
+                              padding: '10px 12px',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              color: '#000000',
+                              backgroundColor: selectedDept === d ? lightBlueBg : 'transparent',
+                              transition: 'background-color 0.1s ease',
+                              textAlign: 'left'
+                            }}
+                          >
+                            {d}
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ padding: '10px 12px', fontSize: '13px', color: textMedium, textAlign: 'left' }}>No departments found</div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                <div className="form-group" style={{ textAlign: 'left', marginBottom: 0 }}>
+                <div className="form-group" style={{ textAlign: 'left', marginBottom: 0, position: 'relative' }}>
                   <label className="form-label" style={{ color: textMedium, fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Location</label>
-                  <select
-                    className="form-control"
-                    value={selectedLoc}
-                    onChange={(e) => {
-                      setSelectedLoc(e.target.value);
-                      setSelectedEmpCode('');
-                    }}
-                    disabled={!selectedDept}
-                    style={{ fontSize: '13px', padding: '8px 12px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
-                  >
-                    <option value="">-- Select Location --</option>
-                    {locationsList.map(l => <option key={l} value={l}>{l}</option>)}
-                  </select>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder={selectedDept ? "Type or select location..." : "Select department first"}
+                      value={locQuery}
+                      onChange={(e) => {
+                        setLocQuery(e.target.value);
+                        setShowLocDropdown(true);
+                      }}
+                      onFocus={() => { if (selectedDept) setShowLocDropdown(true); }}
+                      onBlur={() => {
+                        setTimeout(() => {
+                          setLocQuery(selectedLoc || '');
+                          setShowLocDropdown(false);
+                        }, 200);
+                      }}
+                      disabled={!selectedDept}
+                      style={{ fontSize: '13px', padding: '8px 36px 8px 12px', color: '#000000', backgroundColor: selectedDept ? '#ffffff' : '#f1f5f9', borderColor: borderLight }}
+                    />
+                    <ChevronDown size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: textMedium, pointerEvents: 'none' }} />
+                  </div>
+                  {showLocDropdown && selectedDept && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      backgroundColor: '#ffffff',
+                      border: `1px solid ${borderLight}`,
+                      borderRadius: '6px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      zIndex: 1000,
+                      marginTop: '4px'
+                    }}>
+                      {filteredLocationsList.length > 0 ? (
+                        filteredLocationsList.map(l => (
+                          <div
+                            key={l}
+                            onMouseDown={() => {
+                              setSelectedLoc(l);
+                              setLocQuery(l);
+                              setShowLocDropdown(false);
+                              setSelectedEmpCode('');
+                              setEmpQuery('');
+                            }}
+                            style={{
+                              padding: '10px 12px',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              color: '#000000',
+                              backgroundColor: selectedLoc === l ? lightBlueBg : 'transparent',
+                              transition: 'background-color 0.1s ease',
+                              textAlign: 'left'
+                            }}
+                          >
+                            {l}
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ padding: '10px 12px', fontSize: '13px', color: textMedium, textAlign: 'left' }}>No locations found</div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                <div className="form-group" style={{ textAlign: 'left', marginBottom: 0 }}>
+                <div className="form-group" style={{ textAlign: 'left', marginBottom: 0, position: 'relative' }}>
                   <label className="form-label" style={{ color: textMedium, fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Employee Code & Name</label>
-                  <select
-                    className="form-control"
-                    value={selectedEmpCode}
-                    onChange={(e) => {
-                      setSelectedEmpCode(e.target.value);
-                      setEmployeeCode(e.target.value);
-                    }}
-                    disabled={!selectedLoc}
-                    style={{ fontSize: '13px', padding: '8px 12px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
-                  >
-                    <option value="">-- Select Employee --</option>
-                    {filteredEmployeesList.map(emp => (
-                      <option key={emp.employee_code} value={emp.employee_code}>
-                        {emp.employee_code} - {emp.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder={selectedLoc ? "Type to search by code or name..." : "Select location first"}
+                      value={empQuery}
+                      onChange={(e) => {
+                        setEmpQuery(e.target.value);
+                        setShowEmpDropdown(true);
+                      }}
+                      onFocus={() => { if (selectedLoc) setShowEmpDropdown(true); }}
+                      onBlur={() => {
+                        setTimeout(() => {
+                          const chosenEmp = filteredEmployeesList.find(e => e.employee_code === selectedEmpCode);
+                          setEmpQuery(chosenEmp ? `${chosenEmp.employee_code} - ${chosenEmp.name}` : '');
+                          setShowEmpDropdown(false);
+                        }, 200);
+                      }}
+                      disabled={!selectedLoc}
+                      style={{ fontSize: '13px', padding: '8px 36px 8px 12px', color: '#000000', backgroundColor: selectedLoc ? '#ffffff' : '#f1f5f9', borderColor: borderLight }}
+                    />
+                    <ChevronDown size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: textMedium, pointerEvents: 'none' }} />
+                  </div>
+                  {showEmpDropdown && selectedLoc && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      backgroundColor: '#ffffff',
+                      border: `1px solid ${borderLight}`,
+                      borderRadius: '6px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      zIndex: 1000,
+                      marginTop: '4px'
+                    }}>
+                      {finalEmployeesList.length > 0 ? (
+                        finalEmployeesList.map(emp => (
+                          <div
+                            key={emp.employee_code}
+                            onMouseDown={() => {
+                              setSelectedEmpCode(emp.employee_code);
+                              setEmployeeCode(emp.employee_code);
+                              setEmpQuery(`${emp.employee_code} - ${emp.name}`);
+                              setShowEmpDropdown(false);
+                            }}
+                            style={{
+                              padding: '10px 12px',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              color: '#000000',
+                              backgroundColor: selectedEmpCode === emp.employee_code ? lightBlueBg : 'transparent',
+                              transition: 'background-color 0.1s ease',
+                              textAlign: 'left'
+                            }}
+                          >
+                            <strong>{emp.employee_code}</strong> - {emp.name}
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ padding: '10px 12px', fontSize: '13px', color: textMedium, textAlign: 'left' }}>No active employees found</div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <button 
