@@ -41,9 +41,9 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     serializer_class = EmployeeSerializer
 
     def get_permissions(self):
-        # Allow authenticated users to retrieve (needed for auto-fill in staff view), but modify is admin only
+        # Allow any user to retrieve or list (needed for public appraisal form dropdowns)
         if self.action in ['list', 'retrieve']:
-            return [permissions.IsAuthenticated()]
+            return [permissions.AllowAny()]
         return [IsAdminUserOrReadOnly()]
 
     @action(detail=False, methods=['get'], url_path='export-excel')
@@ -322,6 +322,9 @@ class AppraisalViewSet(viewsets.ModelViewSet):
         if not is_admin:
             if code_param:
                 queryset = queryset.filter(employee_code=code_param)
+            elif self.kwargs.get('pk'):
+                if user and user.is_authenticated:
+                    queryset = queryset.filter(employee_code=user.username)
             else:
                 queryset = queryset.none()
         else:

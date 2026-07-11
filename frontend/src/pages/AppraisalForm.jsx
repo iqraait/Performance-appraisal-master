@@ -78,6 +78,13 @@ export default function AppraisalForm({ token, user }) {
   
   // List of submissions for this code
   const [mySubmissions, setMySubmissions] = useState([]);
+
+  // Cascading dropdown states for public landing access
+  const [allEmployees, setAllEmployees] = useState([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
+  const [selectedDept, setSelectedDept] = useState('');
+  const [selectedLoc, setSelectedLoc] = useState('');
+  const [selectedEmpCode, setSelectedEmpCode] = useState('');
   
   // Operation statuses
   const [fetching, setFetching] = useState(false);
@@ -98,6 +105,27 @@ export default function AppraisalForm({ token, user }) {
       fetchMySubmissions(initialCode);
     }
   }, [initialCode]);
+
+  // Load active employees list for the cascading dropdown selection flow
+  useEffect(() => {
+    if (!initialCode && !employeeName) {
+      const loadAllEmployees = async () => {
+        setLoadingEmployees(true);
+        try {
+          const response = await fetch(`http://${window.location.hostname}:8000/api/employees/?status=Active`);
+          if (response.ok) {
+            const data = await response.json();
+            setAllEmployees(data);
+          }
+        } catch (err) {
+          console.error("Error loading active employees", err);
+        } finally {
+          setLoadingEmployees(false);
+        }
+      };
+      loadAllEmployees();
+    }
+  }, [initialCode, employeeName]);
 
   const fetchEmployeeDetails = async (codeToFetch) => {
     const code = codeToFetch || employeeCode;
@@ -390,7 +418,7 @@ export default function AppraisalForm({ token, user }) {
     if (!window.confirm("Once approved, you can no longer edit this appraisal. Do you want to finalize now?")) return;
 
     try {
-      const response = await fetch(`http://${window.location.hostname}:8000/api/appraisals/${appraisalId}/approve/`, {
+      const response = await fetch(`http://${window.location.hostname}:8000/api/appraisals/${appraisalId}/approve/?employee_code=${employeeCode}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -492,6 +520,15 @@ export default function AppraisalForm({ token, user }) {
   const textDark = 'var(--text-main)';
   const textMedium = 'var(--text-muted)';
 
+  // Filter lists for cascading dropdown selectors
+  const departmentsList = [...new Set(allEmployees.map(e => e.department))].filter(Boolean).sort();
+  const locationsList = selectedDept
+    ? [...new Set(allEmployees.filter(e => e.department === selectedDept).map(e => e.location))].filter(Boolean).sort()
+    : [];
+  const filteredEmployeesList = (selectedDept && selectedLoc)
+    ? allEmployees.filter(e => e.department === selectedDept && e.location === selectedLoc).sort((a, b) => String(a.employee_code).localeCompare(String(b.employee_code)))
+    : [];
+
   const ratingText = getRatingText(finalScore);
   const isCurrentRatingAB = ratingText.includes('(A)') || ratingText.includes('(B)');
   
@@ -520,39 +557,96 @@ export default function AppraisalForm({ token, user }) {
           style={{ 
             marginBottom: '24px', 
             padding: '40px', 
-            textAlign: 'center', 
             backgroundColor: '#ffffff', 
             border: `1px solid ${borderLight}`,
             borderRadius: '8px',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+            maxWidth: '500px',
+            margin: '0 auto 24px'
           }}
         >
-          <div style={{ display: 'inline-flex', padding: '16px', borderRadius: '50%', backgroundColor: lightBlueBg, color: primaryBlue, marginBottom: '16px' }}>
-            <User size={32} />
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ display: 'inline-flex', padding: '16px', borderRadius: '50%', backgroundColor: lightBlueBg, color: primaryBlue, marginBottom: '16px' }}>
+              <User size={32} />
+            </div>
+            <h2 style={{ fontSize: '22px', marginBottom: '8px', color: textDark, fontWeight: '700' }}>Employee Appraisal Access</h2>
+            <p style={{ color: textMedium, fontSize: '14px', marginBottom: '24px' }}>
+              Select your department, location, and name to access your evaluation form.
+            </p>
           </div>
-          <h2 style={{ fontSize: '22px', marginBottom: '8px', color: textDark, fontWeight: '700' }}>Employee Appraisal Access</h2>
-          <p style={{ color: textMedium, fontSize: '14px', marginBottom: '24px', maxWidth: '460px', margin: '0 auto 24px' }}>
-            Please enter your Employee Code to access the evaluation form and view history.
-          </p>
-          <div style={{ display: 'flex', gap: '10px', maxWidth: '380px', margin: '0 auto' }}>
-            <input
-              type="text"
-              id="emp_code_input"
-              className="form-control"
-              placeholder="e.g. EMP001"
-              value={employeeCode}
-              onChange={(e) => setEmployeeCode(e.target.value)}
-              aria-label="Employee Code input"
-              style={{ fontSize: '14px', borderColor: borderLight, color: '#000000', backgroundColor: '#ffffff' }}
-            />
-            <button 
-              className="btn btn-primary" 
-              onClick={() => fetchEmployeeDetails(employeeCode)} 
-              disabled={fetching}
-              style={{ backgroundColor: primaryBlue, borderColor: primaryBlue }}
-            >
-              {fetching ? 'Searching...' : 'Go to Form'}
-            </button>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {loadingEmployees ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
+                <span className="spinner"></span>
+              </div>
+            ) : (
+              <>
+                <div className="form-group" style={{ textAlign: 'left', marginBottom: 0 }}>
+                  <label className="form-label" style={{ color: textMedium, fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Department</label>
+                  <select
+                    className="form-control"
+                    value={selectedDept}
+                    onChange={(e) => {
+                      setSelectedDept(e.target.value);
+                      setSelectedLoc('');
+                      setSelectedEmpCode('');
+                    }}
+                    style={{ fontSize: '13px', padding: '8px 12px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
+                  >
+                    <option value="">-- Select Department --</option>
+                    {departmentsList.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ textAlign: 'left', marginBottom: 0 }}>
+                  <label className="form-label" style={{ color: textMedium, fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Location</label>
+                  <select
+                    className="form-control"
+                    value={selectedLoc}
+                    onChange={(e) => {
+                      setSelectedLoc(e.target.value);
+                      setSelectedEmpCode('');
+                    }}
+                    disabled={!selectedDept}
+                    style={{ fontSize: '13px', padding: '8px 12px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
+                  >
+                    <option value="">-- Select Location --</option>
+                    {locationsList.map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ textAlign: 'left', marginBottom: 0 }}>
+                  <label className="form-label" style={{ color: textMedium, fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Employee Code & Name</label>
+                  <select
+                    className="form-control"
+                    value={selectedEmpCode}
+                    onChange={(e) => {
+                      setSelectedEmpCode(e.target.value);
+                      setEmployeeCode(e.target.value);
+                    }}
+                    disabled={!selectedLoc}
+                    style={{ fontSize: '13px', padding: '8px 12px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
+                  >
+                    <option value="">-- Select Employee --</option>
+                    {filteredEmployeesList.map(emp => (
+                      <option key={emp.employee_code} value={emp.employee_code}>
+                        {emp.employee_code} - {emp.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button 
+                  className="btn btn-primary" 
+                  onClick={() => fetchEmployeeDetails(selectedEmpCode)} 
+                  disabled={fetching || !selectedEmpCode}
+                  style={{ backgroundColor: primaryBlue, borderColor: primaryBlue, width: '100%', marginTop: '8px', padding: '10px 16px', fontWeight: '600' }}
+                >
+                  {fetching ? 'Searching...' : 'Go to Form'}
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
