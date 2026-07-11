@@ -60,6 +60,25 @@ export default function EmployeeMaster({ token }) {
     setTimeout(() => setToast(null), 4000);
   };
 
+  const copyToClipboard = (text) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+  };
+
   const fetchEmployees = async () => {
     setLoading(true);
     try {
@@ -294,7 +313,7 @@ export default function EmployeeMaster({ token }) {
             className="btn btn-secondary" 
             onClick={() => {
               const link = `${window.location.origin}/appraise`;
-              navigator.clipboard.writeText(link);
+              copyToClipboard(link);
               triggerToast('Common Appraisal Link copied to clipboard!');
             }}
             title="Copy common link for all staff members"
@@ -422,7 +441,7 @@ export default function EmployeeMaster({ token }) {
                       <button 
                         onClick={() => {
                           const link = `${window.location.origin}/appraise?code=${emp.employee_code}`;
-                          navigator.clipboard.writeText(link);
+                          copyToClipboard(link);
                           triggerToast(`Link copied for ${emp.name}!`);
                         }}
                         style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'inline-flex', padding: '4px' }}
