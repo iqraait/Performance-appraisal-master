@@ -9,10 +9,46 @@ import {
   AlertCircle, 
   CheckCircle2, 
   Download,
-  Share2
+  Share2,
+  UserCheck
 } from 'lucide-react';
 
-export default function EmployeeMaster({ token }) {
+const copyTextToClipboard = async (text) => {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (err) {
+      console.error('Failed to copy using navigator.clipboard: ', err);
+    }
+  }
+
+  // Fallback to document.execCommand('copy')
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  
+  // Avoid scrolling to bottom
+  textArea.style.top = "0";
+  textArea.style.left = "0";
+  textArea.style.position = "fixed";
+  textArea.style.opacity = "0";
+
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+
+  try {
+    const successful = document.execCommand('copy');
+    document.body.removeChild(textArea);
+    return successful;
+  } catch (err) {
+    console.error('Fallback copy failed: ', err);
+    document.body.removeChild(textArea);
+    return false;
+  }
+};
+
+export default function EmployeeMaster({ token, user, selectedBranch }) {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -40,9 +76,10 @@ export default function EmployeeMaster({ token }) {
     name: '',
     department: '',
     location: '',
+    branch: selectedBranch || '',
     designation: '',
     date_of_joining: '',
-    assignment_period: 'Annual',
+    assignment_period: 'April-2026 to June-2026',
     status: 'Active'
   });
 
@@ -52,6 +89,60 @@ export default function EmployeeMaster({ token }) {
   const [failedRows, setFailedRows] = useState([]);
   const [importLoading, setImportLoading] = useState(false);
 
+  // Department Admin Management Modal State
+  const [isDeptAdminModalOpen, setIsDeptAdminModalOpen] = useState(false);
+  const [deptAdmins, setDeptAdmins] = useState([]);
+  const [deptAdminForm, setDeptAdminForm] = useState({
+    username: '',
+    password: '',
+    departments: '',
+    locations: '',
+    branches: ''
+  });
+
+  const fetchDeptAdmins = async () => {
+    try {
+      const res = await fetch(`http://${window.location.hostname}:8000/api/department-admins/`, {
+        headers: { 'Authorization': `Token ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDeptAdmins(data);
+      }
+    } catch (err) {}
+  };
+
+  const handleSaveDeptAdmin = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        username: deptAdminForm.username,
+        password: deptAdminForm.password,
+        departments: deptAdminForm.departments ? deptAdminForm.departments.split(',').map(s => s.trim()).filter(Boolean) : [],
+        locations: deptAdminForm.locations ? deptAdminForm.locations.split(',').map(s => s.trim()).filter(Boolean) : [],
+        branches: deptAdminForm.branches ? deptAdminForm.branches.split(',').map(s => s.trim()).filter(Boolean) : []
+      };
+      const res = await fetch(`http://${window.location.hostname}:8000/api/department-admins/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        triggerToast('Department Admin saved successfully!');
+        setDeptAdminForm({ username: '', password: '', departments: '', locations: '', branches: '' });
+        fetchDeptAdmins();
+      } else {
+        const errData = await res.json();
+        triggerToast(`Failed to save admin: ${JSON.stringify(errData)}`, 'error');
+      }
+    } catch (err) {
+      triggerToast('Error saving department admin', 'error');
+    }
+  };
+
   // Alerts toast state
   const [toast, setToast] = useState(null);
 
@@ -60,29 +151,10 @@ export default function EmployeeMaster({ token }) {
     setTimeout(() => setToast(null), 4000);
   };
 
-  const copyToClipboard = (text) => {
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text);
-      } else {
-        const textArea = document.createElement("textarea");
-        textArea.value = text;
-        textArea.style.position = "fixed";
-        textArea.style.opacity = "0";
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-      }
-    } catch (err) {
-      console.error('Failed to copy text: ', err);
-    }
-  };
-
   const fetchEmployees = async () => {
     setLoading(true);
     try {
-      let url = `http://${window.location.hostname}:8000/api/employees/?search=${search}&department=${deptFilter}&location=${locFilter}&designation=${desigFilter}&status=${statusFilter}`;
+      let url = `http://${window.location.hostname}:8000/api/employees/?search=${search}&department=${deptFilter}&location=${locFilter}&designation=${desigFilter}&status=${statusFilter}&branch=${encodeURIComponent(selectedBranch || '')}`;
       const response = await fetch(url, {
         headers: { 'Authorization': `Token ${token}` }
       });
@@ -92,9 +164,9 @@ export default function EmployeeMaster({ token }) {
         
         // Populate filter options if empty
         if (depts.length === 0) {
-          const uniqueDepts = [...new Set(data.map(e => e.department))].filter(Boolean);
-          const uniqueLocs = [...new Set(data.map(e => e.location))].filter(Boolean);
-          const uniqueDesigs = [...new Set(data.map(e => e.designation))].filter(Boolean);
+          const uniqueDepts = [...new Set(data.map(e => e.department))].filter(Boolean).sort();
+          const uniqueLocs = [...new Set(data.map(e => e.location))].filter(Boolean).sort();
+          const uniqueDesigs = [...new Set(data.map(e => e.designation))].filter(Boolean).sort();
           setDepts(uniqueDepts);
           setLocs(uniqueLocs);
           setDesigs(uniqueDesigs);
@@ -109,10 +181,10 @@ export default function EmployeeMaster({ token }) {
 
   useEffect(() => {
     fetchEmployees();
-  }, [search, deptFilter, locFilter, desigFilter, statusFilter]);
+  }, [search, deptFilter, locFilter, desigFilter, statusFilter, selectedBranch]);
 
   const handleExportEmployees = () => {
-    const exportUrl = `http://${window.location.hostname}:8000/api/employees/export-excel/?search=${search}&department=${deptFilter}&location=${locFilter}&designation=${desigFilter}&status=${statusFilter}`;
+    const exportUrl = `http://${window.location.hostname}:8000/api/employees/export-excel/?search=${search}&department=${deptFilter}&location=${locFilter}&designation=${desigFilter}&status=${statusFilter}&branch=${encodeURIComponent(selectedBranch || '')}`;
     triggerToast('Preparing Excel export...');
     fetch(exportUrl, {
       headers: { 'Authorization': `Token ${token}` }
@@ -168,6 +240,7 @@ export default function EmployeeMaster({ token }) {
       name: emp.name,
       department: emp.department,
       location: emp.location || '',
+      branch: emp.branch || selectedBranch || '',
       designation: emp.designation,
       date_of_joining: emp.date_of_joining,
       assignment_period: emp.assignment_period,
@@ -209,10 +282,7 @@ export default function EmployeeMaster({ token }) {
         method: 'DELETE',
         headers: { 'Authorization': `Token ${token}` }
       });
-      if (response.status === 24) {
-        triggerToast('Employee deleted successfully.');
-        fetchEmployees();
-      } else if (response.ok || response.status === 204) {
+      if (response.status === 204 || response.ok) {
         triggerToast('Employee deleted successfully.');
         fetchEmployees();
       } else {
@@ -227,11 +297,12 @@ export default function EmployeeMaster({ token }) {
     setFormData({
       employee_code: '',
       name: '',
-      department: '',
-      location: '',
+      department: (user && user.role === 'department_admin' && user.departments?.length > 0) ? user.departments[0] : '',
+      location: (user && user.role === 'department_admin' && user.locations?.length > 0) ? user.locations[0] : '',
+      branch: selectedBranch || '',
       designation: '',
       date_of_joining: '',
-      assignment_period: 'Annual',
+      assignment_period: 'April-2026 to June-2026',
       status: 'Active'
     });
     setActiveEmployee(null);
@@ -254,9 +325,12 @@ export default function EmployeeMaster({ token }) {
 
     const uploadData = new FormData();
     uploadData.append('file', excelFile);
+    if (selectedBranch) {
+      uploadData.append('selected_branch', selectedBranch);
+    }
 
     try {
-      const response = await fetch(`http://${window.location.hostname}:8000/api/employees/import-excel/`, {
+      const response = await fetch(`http://${window.location.hostname}:8000/api/employees/import-excel/?branch=${encodeURIComponent(selectedBranch || '')}`, {
         method: 'POST',
         headers: { 'Authorization': `Token ${token}` },
         body: uploadData
@@ -306,31 +380,71 @@ export default function EmployeeMaster({ token }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 className="dashboard-title" style={{ marginBottom: 0 }}>Employee Master</h1>
-        <div style={{ display: 'flex', gap: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <h1 className="dashboard-title" style={{ marginBottom: 0 }}>Employee Master</h1>
+          <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--primary)', backgroundColor: 'rgba(30, 58, 138, 0.08)', padding: '4px 12px', borderRadius: '16px', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center' }}>
+            Total: {employees.length} {employees.length === 1 ? 'employee' : 'employees'}
+          </span>
+          {selectedBranch && (
+            <span 
+              title={selectedBranch}
+              style={{ 
+                backgroundColor: 'rgba(234, 88, 12, 0.08)', 
+                color: 'var(--accent)', 
+                padding: '4px 12px', 
+                borderRadius: '16px', 
+                fontSize: '12px', 
+                fontWeight: '600',
+                border: '1px solid rgba(234, 88, 12, 0.2)',
+                maxWidth: '240px',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                display: 'inline-block'
+              }}
+            >
+              Branch: {selectedBranch}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+          {user?.role === 'superuser' && (
+            <button 
+              className="btn btn-secondary btn-sm" 
+              onClick={() => { fetchDeptAdmins(); setIsDeptAdminModalOpen(true); }}
+              title="Manage Department Admins & Permissions"
+            >
+              <UserCheck size={15} />
+              <span>Dept Admins</span>
+            </button>
+          )}
           <button 
-            className="btn btn-secondary" 
-            onClick={() => {
+            className="btn btn-secondary btn-sm" 
+            onClick={async () => {
               const link = `${window.location.origin}/appraise`;
-              copyToClipboard(link);
-              triggerToast('Common Appraisal Link copied to clipboard!');
+              const success = await copyTextToClipboard(link);
+              if (success) {
+                triggerToast('Common Appraisal Link copied to clipboard!');
+              } else {
+                triggerToast('Failed to copy link. Please copy it manually.', 'error');
+              }
             }}
             title="Copy common link for all staff members"
           >
-            <Share2 size={16} />
-            <span>Copy Common Link</span>
+            <Share2 size={15} />
+            <span>Copy Link</span>
           </button>
-          <button className="btn btn-secondary" onClick={handleExportEmployees} title="Export employees to Excel">
-            <Download size={16} />
+          <button className="btn btn-secondary btn-sm" onClick={handleExportEmployees} title="Export employees to Excel">
+            <Download size={15} />
             <span>Export Master</span>
           </button>
-          <button className="btn btn-secondary" onClick={() => setIsImportModalOpen(true)}>
-            <Upload size={16} />
+          <button className="btn btn-secondary btn-sm" onClick={() => setIsImportModalOpen(true)}>
+            <Upload size={15} />
             <span>Excel Import</span>
           </button>
-          <button className="btn btn-primary" onClick={() => { resetForm(); setIsAddModalOpen(true); }}>
-            <Plus size={16} />
+          <button className="btn btn-primary btn-sm" onClick={() => { resetForm(); setIsAddModalOpen(true); }}>
+            <Plus size={15} />
             <span>Add Employee</span>
           </button>
         </div>
@@ -338,7 +452,7 @@ export default function EmployeeMaster({ token }) {
 
       {/* Filter / Search Bar */}
       <div className="filter-bar">
-        <div className="filter-item" style={{ flexGrow: 2 }}>
+        <div className="filter-item filter-search">
           <label className="form-label">Search</label>
           <div style={{ position: 'relative' }}>
             <input
@@ -355,17 +469,41 @@ export default function EmployeeMaster({ token }) {
 
         <div className="filter-item">
           <label className="form-label">Department</label>
-          <select className="form-control" value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}>
-            <option value="">All Departments</option>
-            {depts.map(d => <option key={d} value={d}>{d}</option>)}
+          <select 
+            className="form-control" 
+            value={deptFilter} 
+            onChange={(e) => setDeptFilter(e.target.value)}
+          >
+            {user && user.role === 'department_admin' ? (
+              <>
+                <option value="">All My Departments</option>
+                {user.departments && user.departments.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </>
+            ) : (
+              <>
+                <option value="">All Departments</option>
+                {depts.map(d => <option key={d} value={d}>{d}</option>)}
+              </>
+            )}
           </select>
         </div>
 
         <div className="filter-item">
           <label className="form-label">Location</label>
           <select className="form-control" value={locFilter} onChange={(e) => setLocFilter(e.target.value)}>
-            <option value="">All Locations</option>
-            {locs.map(l => <option key={l} value={l}>{l}</option>)}
+            {user && user.role === 'department_admin' && user.locations?.length > 0 ? (
+              <>
+                <option value="">All My Locations</option>
+                {user.locations.map(l => <option key={l} value={l}>{l}</option>)}
+              </>
+            ) : (
+              <>
+                <option value="">All Locations</option>
+                {locs.map(l => <option key={l} value={l}>{l}</option>)}
+              </>
+            )}
           </select>
         </div>
 
@@ -405,6 +543,7 @@ export default function EmployeeMaster({ token }) {
                 <th>Employee Name</th>
                 <th>Department</th>
                 <th>Location</th>
+                <th>Branch</th>
                 <th>Designation</th>
                 <th>Date of Joining</th>
                 <th>Status</th>
@@ -415,9 +554,10 @@ export default function EmployeeMaster({ token }) {
               {employees.map((emp) => (
                 <tr key={emp.id}>
                   <td style={{ fontWeight: '600', color: 'var(--primary)' }}>{emp.employee_code}</td>
-                  <td>{emp.name}</td>
+                  <td style={{ fontWeight: '500' }}>{emp.name}</td>
                   <td>{emp.department}</td>
                   <td>{emp.location}</td>
+                  <td title={emp.branch || '-'}><span className="cell-truncated">{emp.branch || '-'}</span></td>
                   <td>{emp.designation}</td>
                   <td>{emp.date_of_joining}</td>
                   <td>
@@ -439,10 +579,14 @@ export default function EmployeeMaster({ token }) {
                   <td>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button 
-                        onClick={() => {
+                        onClick={async () => {
                           const link = `${window.location.origin}/appraise?code=${emp.employee_code}`;
-                          copyToClipboard(link);
-                          triggerToast(`Link copied for ${emp.name}!`);
+                          const success = await copyTextToClipboard(link);
+                          if (success) {
+                            triggerToast(`Link copied for ${emp.name}!`);
+                          } else {
+                            triggerToast('Failed to copy link. Please copy it manually.', 'error');
+                          }
                         }}
                         style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'inline-flex', padding: '4px' }}
                         title="Copy Public Appraisal Link"
@@ -507,25 +651,55 @@ export default function EmployeeMaster({ token }) {
               <div className="grid-cols-3">
                 <div className="form-group">
                   <label className="form-label">Department</label>
-                  <input
-                    type="text"
-                    name="department"
-                    className="form-control"
-                    value={formData.department}
-                    onChange={handleInputChange}
-                    required
-                  />
+                  {user && user.role === 'department_admin' ? (
+                    <select
+                      name="department"
+                      className="form-control"
+                      value={formData.department}
+                      onChange={handleInputChange}
+                      required
+                      style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: 'var(--border-color)' }}
+                    >
+                      {user.departments && user.departments.map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      name="department"
+                      className="form-control"
+                      value={formData.department}
+                      onChange={handleInputChange}
+                      required
+                    />
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Location</label>
-                  <input
-                    type="text"
-                    name="location"
-                    className="form-control"
-                    value={formData.location}
-                    onChange={handleInputChange}
-                    required
-                  />
+                  {user && user.role === 'department_admin' && user.locations?.length > 0 ? (
+                    <select
+                      name="location"
+                      className="form-control"
+                      value={formData.location}
+                      onChange={handleInputChange}
+                      required
+                      style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: 'var(--border-color)' }}
+                    >
+                      {user.locations.map(l => (
+                        <option key={l} value={l}>{l}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      name="location"
+                      className="form-control"
+                      value={formData.location}
+                      onChange={handleInputChange}
+                      required
+                    />
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Designation</label>
@@ -599,6 +773,7 @@ export default function EmployeeMaster({ token }) {
                   className="form-control"
                   value={formData.employee_code}
                   disabled
+                  style={{ backgroundColor: '#f1f5f9', color: '#000000', fontWeight: '600' }}
                 />
               </div>
 
@@ -617,25 +792,55 @@ export default function EmployeeMaster({ token }) {
               <div className="grid-cols-3">
                 <div className="form-group">
                   <label className="form-label">Department</label>
-                  <input
-                    type="text"
-                    name="department"
-                    className="form-control"
-                    value={formData.department}
-                    onChange={handleInputChange}
-                    required
-                  />
+                  {user && user.role === 'department_admin' ? (
+                    <select
+                      name="department"
+                      className="form-control"
+                      value={formData.department}
+                      onChange={handleInputChange}
+                      required
+                      style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: 'var(--border-color)' }}
+                    >
+                      {user.departments && user.departments.map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      name="department"
+                      className="form-control"
+                      value={formData.department}
+                      onChange={handleInputChange}
+                      required
+                    />
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Location</label>
-                  <input
-                    type="text"
-                    name="location"
-                    className="form-control"
-                    value={formData.location}
-                    onChange={handleInputChange}
-                    required
-                  />
+                  {user && user.role === 'department_admin' && user.locations?.length > 0 ? (
+                    <select
+                      name="location"
+                      className="form-control"
+                      value={formData.location}
+                      onChange={handleInputChange}
+                      required
+                      style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: 'var(--border-color)' }}
+                    >
+                      {user.locations.map(l => (
+                        <option key={l} value={l}>{l}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      name="location"
+                      className="form-control"
+                      value={formData.location}
+                      onChange={handleInputChange}
+                      required
+                    />
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Designation</label>
@@ -772,6 +977,118 @@ export default function EmployeeMaster({ token }) {
           </div>
         </div>
       )}
+
+      {/* Department Admin Management Modal */}
+      {isDeptAdminModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '650px', width: '90%' }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Manage Department Admins</h2>
+            </div>
+            
+            <form onSubmit={handleSaveDeptAdmin} style={{ marginBottom: '24px', backgroundColor: 'var(--bg-active)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <h3 style={{ fontSize: '14px', marginBottom: '12px', fontWeight: '600', color: 'var(--primary)' }}>Add / Tag Department Admin</h3>
+              <div className="grid-cols-2" style={{ gap: '12px' }}>
+                <div className="form-group" style={{ marginBottom: '10px' }}>
+                  <label className="form-label" style={{ fontSize: '12px' }}>Username</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. dept_head1"
+                    value={deptAdminForm.username}
+                    onChange={(e) => setDeptAdminForm({ ...deptAdminForm, username: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: '10px' }}>
+                  <label className="form-label" style={{ fontSize: '12px' }}>Password</label>
+                  <input
+                    type="password"
+                    className="form-control"
+                    placeholder="Set password"
+                    value={deptAdminForm.password}
+                    onChange={(e) => setDeptAdminForm({ ...deptAdminForm, password: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '10px' }}>
+                <label className="form-label" style={{ fontSize: '12px' }}>Departments (Comma Separated)</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="e.g. Nursing, Pharmacy, OPD"
+                  value={deptAdminForm.departments}
+                  onChange={(e) => setDeptAdminForm({ ...deptAdminForm, departments: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="grid-cols-2" style={{ gap: '12px' }}>
+                <div className="form-group" style={{ marginBottom: '10px' }}>
+                  <label className="form-label" style={{ fontSize: '12px' }}>Locations (Comma Separated, Optional)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. Block A, Main OPD"
+                    value={deptAdminForm.locations}
+                    onChange={(e) => setDeptAdminForm({ ...deptAdminForm, locations: e.target.value })}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: '10px' }}>
+                  <label className="form-label" style={{ fontSize: '12px' }}>Branches (Comma Separated, Optional)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. City Branch, Central Hospital"
+                    value={deptAdminForm.branches}
+                    onChange={(e) => setDeptAdminForm({ ...deptAdminForm, branches: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ textAlign: 'right', marginTop: '10px' }}>
+                <button type="submit" className="btn btn-primary btn-sm">Save Department Admin</button>
+              </div>
+            </form>
+
+            <h3 style={{ fontSize: '14px', marginBottom: '12px', fontWeight: '600' }}>Existing Department Admins</h3>
+            <div className="table-container" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+              <table className="data-table" style={{ fontSize: '12px' }}>
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Tagged Departments</th>
+                    <th>Locations</th>
+                    <th>Branches</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deptAdmins.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No Department Admins registered yet.</td>
+                    </tr>
+                  ) : (
+                    deptAdmins.map((da) => (
+                      <tr key={da.id}>
+                        <td style={{ fontWeight: '600', color: 'var(--primary)' }}>{da.user_detail?.username || da.username}</td>
+                        <td>{da.departments?.join(', ') || '-'}</td>
+                        <td>{da.locations?.length > 0 ? da.locations.join(', ') : 'All Locations'}</td>
+                        <td>{da.branches?.length > 0 ? da.branches.join(', ') : 'All Branches'}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="modal-actions" style={{ marginTop: '20px' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setIsDeptAdminModalOpen(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

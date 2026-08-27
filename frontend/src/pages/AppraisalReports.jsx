@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
   Download, 
@@ -11,7 +12,8 @@ import {
   CheckCircle2
 } from 'lucide-react';
 
-export default function AppraisalReports({ token }) {
+export default function AppraisalReports({ token, user, selectedBranch }) {
+  const navigate = useNavigate();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
@@ -25,6 +27,7 @@ export default function AppraisalReports({ token }) {
   const [desigFilter, setDesigFilter] = useState('');
   const [periodFilter, setPeriodFilter] = useState('');
   const [ratingFilter, setRatingFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
@@ -45,7 +48,7 @@ export default function AppraisalReports({ token }) {
   };
 
   const getQueryString = () => {
-    return `search=${search}&code=${codeFilter}&name=${nameFilter}&department=${deptFilter}&location=${locFilter}&designation=${desigFilter}&assignment_period=${periodFilter}&rating=${ratingFilter}&start_date=${startDate}&end_date=${endDate}`;
+    return `search=${search}&code=${codeFilter}&name=${nameFilter}&department=${deptFilter}&location=${locFilter}&designation=${desigFilter}&assignment_period=${periodFilter}&rating=${ratingFilter}&start_date=${startDate}&end_date=${endDate}&status=${statusFilter}&branch=${encodeURIComponent(selectedBranch || '')}`;
   };
 
   const fetchReports = async () => {
@@ -58,18 +61,27 @@ export default function AppraisalReports({ token }) {
         const data = await response.json();
         setReports(data);
 
-        // Derive unique dropdown sets from the full reports database
+        // Derive unique dropdown sets from all records (both submitted and pending)
         if (depts.length === 0) {
-          const uniqueDepts = [...new Set(data.map(r => r.department))].filter(Boolean);
-          const uniqueLocs = [...new Set(data.map(r => r.location))].filter(Boolean);
-          const uniqueDesigs = [...new Set(data.map(r => r.designation))].filter(Boolean);
-          const uniquePeriods = [...new Set(data.map(r => r.assignment_period))].filter(Boolean);
-          const uniqueRatings = [...new Set(data.map(r => r.rating))].filter(Boolean);
-          setDepts(uniqueDepts);
-          setLocs(uniqueLocs);
-          setDesigs(uniqueDesigs);
-          setPeriods(uniquePeriods);
-          setRatings(uniqueRatings);
+          fetch(`http://${window.location.hostname}:8000/api/appraisals/?status=all&branch=${encodeURIComponent(selectedBranch || '')}`, {
+            headers: { 'Authorization': `Token ${token}` }
+          })
+          .then(res => res.json())
+          .then(allData => {
+            if (Array.isArray(allData)) {
+              const uniqueDepts = [...new Set(allData.map(r => r.department))].filter(Boolean).sort();
+              const uniqueLocs = [...new Set(allData.map(r => r.location))].filter(Boolean).sort();
+              const uniqueDesigs = [...new Set(allData.map(r => r.designation))].filter(Boolean).sort();
+              const uniquePeriods = [...new Set(allData.map(r => r.assignment_period))].filter(Boolean).sort();
+              const uniqueRatings = [...new Set(allData.map(r => r.rating))].filter(r => r && r !== 'Pending').sort();
+              setDepts(uniqueDepts);
+              setLocs(uniqueLocs);
+              setDesigs(uniqueDesigs);
+              setPeriods(uniquePeriods);
+              setRatings(uniqueRatings);
+            }
+          })
+          .catch(() => {});
         }
       } else {
         triggerToast('Failed to load appraisal reports.', 'error');
@@ -83,18 +95,14 @@ export default function AppraisalReports({ token }) {
 
   useEffect(() => {
     fetchReports();
-  }, [search, codeFilter, nameFilter, deptFilter, locFilter, desigFilter, periodFilter, ratingFilter, startDate, endDate]);
+  }, [search, codeFilter, nameFilter, deptFilter, locFilter, desigFilter, periodFilter, ratingFilter, startDate, endDate, statusFilter, selectedBranch]);
+
 
   const handleExportExcel = () => {
     const exportUrl = `http://${window.location.hostname}:8000/api/appraisals/export-excel/?${getQueryString()}`;
     const link = document.createElement('a');
     link.href = exportUrl;
     link.setAttribute('download', 'appraisal_reports.xlsx');
-    // Include token in query parameter or rely on Django session/cookie/custom auth headers?
-    // Since we open link directly, we must include authentication. 
-    // Wait! Let's append the token as a query parameter for download!
-    // Wait, in ExcelExportView, is token authentication required? Yes, because it has IsAdminUserOrReadOnly.
-    // If they click, we can fetch it as a blob with Auth header, and trigger download. This is 100% secure and bypasses auth issues!
     triggerToast('Preparing Excel export...');
     fetch(exportUrl, {
       headers: { 'Authorization': `Token ${token}` }
@@ -142,17 +150,43 @@ export default function AppraisalReports({ token }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 className="dashboard-title" style={{ marginBottom: 0 }}>Appraisal Reports</h1>
-        <button className="btn btn-primary" onClick={handleExportExcel}>
-          <Download size={16} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <h1 className="dashboard-title" style={{ marginBottom: 0 }}>Appraisal Reports</h1>
+          <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--primary)', backgroundColor: 'rgba(30, 58, 138, 0.08)', padding: '4px 12px', borderRadius: '16px', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center' }}>
+            Total: {reports.length} {reports.length === 1 ? 'record' : 'records'}
+          </span>
+          {selectedBranch && (
+            <span 
+              title={selectedBranch}
+              style={{ 
+                backgroundColor: 'rgba(234, 88, 12, 0.08)', 
+                color: 'var(--accent)', 
+                padding: '4px 12px', 
+                borderRadius: '16px', 
+                fontSize: '12px', 
+                fontWeight: '600',
+                border: '1px solid rgba(234, 88, 12, 0.2)',
+                maxWidth: '240px',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                display: 'inline-block'
+              }}
+            >
+              Branch: {selectedBranch}
+            </span>
+          )}
+        </div>
+        <button className="btn btn-primary btn-sm" onClick={handleExportExcel}>
+          <Download size={15} />
           <span>Export to Excel</span>
         </button>
       </div>
 
       {/* Advanced Filters */}
       <div className="filter-bar">
-        <div className="filter-item" style={{ flexGrow: 2, flexBasis: '250px' }}>
+        <div className="filter-item filter-search">
           <label className="form-label">Search (Code/Name)</label>
           <div style={{ position: 'relative' }}>
             <input
@@ -168,18 +202,56 @@ export default function AppraisalReports({ token }) {
         </div>
 
         <div className="filter-item">
+          <label className="form-label">Submission Status</label>
+          <select 
+            className="form-control" 
+            value={statusFilter} 
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{ fontWeight: statusFilter ? '600' : 'normal', color: statusFilter === 'pending' ? 'var(--color-d)' : 'inherit' }}
+          >
+            <option value="">Submitted Appraisals</option>
+            <option value="pending">Pending Appraisals</option>
+            <option value="all">All (Submitted & Pending)</option>
+          </select>
+        </div>
+
+        <div className="filter-item">
           <label className="form-label">Department</label>
-          <select className="form-control" value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}>
-            <option value="">All Departments</option>
-            {depts.map(d => <option key={d} value={d}>{d}</option>)}
+          <select 
+            className="form-control" 
+            value={deptFilter} 
+            onChange={(e) => setDeptFilter(e.target.value)}
+          >
+            {user && user.role === 'department_admin' ? (
+              <>
+                <option value="">All My Departments</option>
+                {user.departments && user.departments.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </>
+            ) : (
+              <>
+                <option value="">All Departments</option>
+                {depts.map(d => <option key={d} value={d}>{d}</option>)}
+              </>
+            )}
           </select>
         </div>
 
         <div className="filter-item">
           <label className="form-label">Location</label>
           <select className="form-control" value={locFilter} onChange={(e) => setLocFilter(e.target.value)}>
-            <option value="">All Locations</option>
-            {locs.map(l => <option key={l} value={l}>{l}</option>)}
+            {user && user.role === 'department_admin' && user.locations?.length > 0 ? (
+              <>
+                <option value="">All My Locations</option>
+                {user.locations.map(l => <option key={l} value={l}>{l}</option>)}
+              </>
+            ) : (
+              <>
+                <option value="">All Locations</option>
+                {locs.map(l => <option key={l} value={l}>{l}</option>)}
+              </>
+            )}
           </select>
         </div>
 
@@ -211,12 +283,12 @@ export default function AppraisalReports({ token }) {
           </select>
         </div>
 
-        <div className="filter-item" style={{ flexBasis: '180px' }}>
+        <div className="filter-item">
           <label className="form-label">Start Date</label>
           <input type="date" className="form-control" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         </div>
 
-        <div className="filter-item" style={{ flexBasis: '180px' }}>
+        <div className="filter-item">
           <label className="form-label">End Date</label>
           <input type="date" className="form-control" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
         </div>
@@ -229,7 +301,7 @@ export default function AppraisalReports({ token }) {
         </div>
       ) : reports.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-          No appraisal submissions match the filter criteria.
+          No appraisal records match the filter criteria.
         </div>
       ) : (
         <div className="table-container">
@@ -240,6 +312,7 @@ export default function AppraisalReports({ token }) {
                 <th>Employee Name</th>
                 <th>Department</th>
                 <th>Location</th>
+                <th>Branch</th>
                 <th>Designation</th>
                 <th>Period</th>
                 <th style={{ textAlign: 'center' }}>Perf. Score</th>
@@ -247,48 +320,73 @@ export default function AppraisalReports({ token }) {
                 <th style={{ textAlign: 'center' }}>Final Score</th>
                 <th>Rating</th>
                 <th>Submitted Date</th>
+                <th>Admin ID</th>
                 <th>Action</th>
               </tr>
             </thead>
             <tbody>
-              {reports.map((r) => (
-                <tr key={r.id}>
-                  <td style={{ fontWeight: '600', color: 'var(--primary)' }}>{r.employee_code}</td>
-                  <td style={{ fontWeight: '500' }}>{r.employee_name}</td>
-                  <td>{r.department}</td>
-                  <td>{r.location}</td>
-                  <td>{r.designation}</td>
-                  <td>{r.assignment_period}</td>
-                  <td style={{ textAlign: 'center' }}>{r.performance_score}</td>
-                  <td style={{ textAlign: 'center', color: r.total_deduction > 0 ? 'var(--color-e)' : 'inherit' }}>
-                    {r.total_deduction}
-                  </td>
-                  <td style={{ textAlign: 'center', fontWeight: '600', color: 'var(--accent)' }}>{r.final_score}</td>
-                  <td>
-                    <span className={`rating-badge ${getRatingClass(r.rating)}`}>
-                      {r.rating ? (() => {
-                        const match = r.rating.match(/\(([^)]+)\)/);
-                        return match ? match[1] : r.rating;
-                      })() : ''} 
-                    </span>
-                  </td>
-                  <td style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                    {r.submitted_date ? r.submitted_date.substring(0, 10) : ''}
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button 
-                        onClick={() => handleViewClick(r)}
-                        className="btn btn-secondary btn-sm"
-                        style={{ padding: '6px', minWidth: 'auto' }}
-                        title="View Appraisal"
-                      >
-                        <Eye size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {reports.map((r) => {
+                const isPending = r.is_pending || r.status === 'Pending' || r.rating === 'Pending';
+                return (
+                  <tr key={r.id}>
+                    <td style={{ fontWeight: '600', color: 'var(--primary)' }}>{r.employee_code}</td>
+                    <td style={{ fontWeight: '500' }}>{r.employee_name}</td>
+                    <td>{r.department}</td>
+                    <td>{r.location || '-'}</td>
+                    <td title={r.branch || '-'}><span className="cell-truncated">{r.branch || '-'}</span></td>
+                    <td>{r.designation}</td>
+                    <td>{r.assignment_period || '-'}</td>
+                    <td style={{ textAlign: 'center' }}>{isPending ? '-' : r.performance_score}</td>
+                    <td style={{ textAlign: 'center', color: !isPending && r.total_deduction > 0 ? 'var(--color-e)' : 'inherit' }}>
+                      {isPending ? '-' : r.total_deduction}
+                    </td>
+                    <td style={{ textAlign: 'center', fontWeight: '600', color: 'var(--accent)' }}>{isPending ? '-' : r.final_score}</td>
+                    <td>
+                      {isPending ? (
+                        <span className="rating-badge" style={{ backgroundColor: '#f59e0b', color: '#ffffff', fontWeight: '600' }}>
+                          Pending
+                        </span>
+                      ) : (
+                        <span className={`rating-badge ${getRatingClass(r.rating)}`}>
+                          {r.rating ? (() => {
+                            const match = r.rating.match(/\(([^)]+)\)/);
+                            return match ? match[1] : r.rating;
+                          })() : ''} 
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                      {!isPending && r.submitted_date ? r.submitted_date.substring(0, 10) : '-'}
+                    </td>
+                    <td style={{ color: 'var(--text-main)', fontWeight: '500' }}>
+                      {!isPending && r.submitted_by_detail ? r.submitted_by_detail.username : '-'}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {isPending ? (
+                          <button
+                            onClick={() => navigate(`/appraise?code=${r.employee_code}`)}
+                            className="btn btn-primary btn-sm"
+                            style={{ padding: '4px 10px', fontSize: '12px', whiteSpace: 'nowrap' }}
+                            title="Go to Appraisal Form"
+                          >
+                            Go to Form
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => handleViewClick(r)}
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '6px', minWidth: 'auto' }}
+                            title="View Appraisal"
+                          >
+                            <Eye size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

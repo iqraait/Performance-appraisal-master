@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { 
   Printer, 
   Edit, 
@@ -17,24 +18,32 @@ import {
   ChevronDown
 } from 'lucide-react';
 
-export default function AppraisalForm({ token, user }) {
+export default function AppraisalForm({ token, user, selectedBranch }) {
+  const routeLocation = useLocation();
+
   // Query parameter parsing for direct links (e.g. /appraise?code=EMP001)
   const getQueryCode = () => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(routeLocation.search);
     return params.get('code') || '';
   };
 
-  const isAdmin = user && user.is_staff;
+  const getQueryTab = () => {
+    const params = new URLSearchParams(routeLocation.search);
+    return params.get('tab') || 'form';
+  };
+
+  const isAdmin = user && (user.is_staff || user.is_superuser || user.role === 'department_admin' || user.role === 'superuser');
   const initialCode = getQueryCode() || (user && !user.is_staff ? user.username : '');
 
   // Tabs state: 'form' or 'list'
-  const [activeTab, setActiveTab] = useState('form');
+  const [activeTab, setActiveTab] = useState(getQueryTab());
 
   // Employee details
   const [employeeCode, setEmployeeCode] = useState(initialCode);
   const [employeeName, setEmployeeName] = useState('');
   const [department, setDepartment] = useState('');
   const [location, setLocation] = useState('');
+  const [branch, setBranch] = useState(selectedBranch || '');
   const [designation, setDesignation] = useState('');
   const [dateOfJoining, setDateOfJoining] = useState('');
   const [assignmentPeriod, setAssignmentPeriod] = useState('Annual');
@@ -67,8 +76,8 @@ export default function AppraisalForm({ token, user }) {
   // Validation errors
   const [validationErrors, setValidationErrors] = useState({});
 
-  // Location active staff and A/B stats
-  const [locationStats, setLocationStats] = useState({
+  // Department active staff and A/B stats
+  const [departmentStats, setDepartmentStats] = useState({
     activeStaff: 0,
     existingAB: 0,
     originalAppraisalRating: null
@@ -108,14 +117,32 @@ export default function AppraisalForm({ token, user }) {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Auto-fetch employee details on mount if code is available
+  // Listen to tab/code query changes from Sidebar links or route queries
   useEffect(() => {
-    if (initialCode) {
-      setEmployeeCode(initialCode);
-      fetchEmployeeDetails(initialCode);
-      fetchMySubmissions(initialCode);
+    const params = new URLSearchParams(routeLocation.search);
+    const tab = params.get('tab') || 'form';
+    setActiveTab(tab);
+    
+    const code = params.get('code') || (user && !user.is_staff ? user.username : '');
+    if (code) {
+      setEmployeeCode(code);
+      fetchEmployeeDetails(code);
+      fetchMySubmissions(code);
+      fetchExistingAppraisal(code, assignmentPeriod);
+    } else {
+      setEmployeeCode('');
+      setEmployeeName('');
+      setDepartment('');
+      setLocation('');
+      setBranch(selectedBranch || '');
+      setDesignation('');
+      setDateOfJoining('');
+      setEditingAppraisalId(null);
+      if (tab === 'list') {
+        fetchMySubmissions('');
+      }
     }
-  }, [initialCode]);
+  }, [routeLocation.search, user, selectedBranch]);
 
   // Load active employees list for the cascading dropdown selection flow
   useEffect(() => {
@@ -123,7 +150,9 @@ export default function AppraisalForm({ token, user }) {
       const loadAllEmployees = async () => {
         setLoadingEmployees(true);
         try {
-          const response = await fetch(`http://${window.location.hostname}:8000/api/employees/?status=Active`);
+          const response = await fetch(`http://${window.location.hostname}:8000/api/employees/?status=Active&branch=${encodeURIComponent(selectedBranch || '')}`, {
+            headers: token ? { 'Authorization': `Token ${token}` } : {}
+          });
           if (response.ok) {
             const data = await response.json();
             setAllEmployees(data);
@@ -136,7 +165,7 @@ export default function AppraisalForm({ token, user }) {
       };
       loadAllEmployees();
     }
-  }, [initialCode, employeeName]);
+  }, [initialCode, employeeName, token, selectedBranch]);
 
   const fetchEmployeeDetails = async (codeToFetch) => {
     const code = codeToFetch || employeeCode;
@@ -147,20 +176,25 @@ export default function AppraisalForm({ token, user }) {
     
     setFetching(true);
     try {
-      const response = await fetch(`http://${window.location.hostname}:8000/api/employees/fetch/?code=${code}`);
+      const response = await fetch(`http://${window.location.hostname}:8000/api/employees/fetch/?code=${code}&branch=${encodeURIComponent(selectedBranch || '')}`, {
+        headers: token ? { 'Authorization': `Token ${token}` } : {}
+      });
       const data = await response.json();
       
       if (response.ok) {
+        setEmployeeCode(data.employee_code || code);
         setEmployeeName(data.name || '');
         setDepartment(data.department || '');
         setLocation(data.location || '');
+        setBranch(data.branch || selectedBranch || '');
         setDesignation(data.designation || '');
         setDateOfJoining(data.date_of_joining || '');
         setAssignmentPeriod(data.assignment_period || 'Annual');
         
-        setLocationStats({
-          activeStaff: data.location_total_active || 0,
-          existingAB: data.location_existing_ab || 0,
+        const useLocCount = data.location && data.location_total_active > 0;
+        setDepartmentStats({
+          activeStaff: useLocCount ? data.location_total_active : (data.department_total_active || 0),
+          existingAB: useLocCount ? data.location_existing_ab : (data.department_existing_ab || 0),
           originalAppraisalRating: null
         });
         
@@ -179,12 +213,15 @@ export default function AppraisalForm({ token, user }) {
 
   const fetchMySubmissions = async (codeToQuery) => {
     const code = codeToQuery || employeeCode;
-    if (!code) return;
 
     setLoadingHistory(true);
     try {
-      const url = `http://${window.location.hostname}:8000/api/appraisals/?employee_code=${code}`;
-      const response = await fetch(url);
+      const url = code 
+        ? `http://${window.location.hostname}:8000/api/appraisals/?employee_code=${code}&branch=${encodeURIComponent(selectedBranch || '')}`
+        : `http://${window.location.hostname}:8000/api/appraisals/?branch=${encodeURIComponent(selectedBranch || '')}`;
+      const response = await fetch(url, {
+        headers: token ? { 'Authorization': `Token ${token}` } : {}
+      });
       if (response.ok) {
         const data = await response.json();
         setMySubmissions(data);
@@ -193,6 +230,69 @@ export default function AppraisalForm({ token, user }) {
       console.error('Failed to load submissions list', err);
     } finally {
       setLoadingHistory(false);
+    }
+  };
+
+
+  const fetchExistingAppraisal = async (codeToQuery, periodToQuery) => {
+    const code = codeToQuery || employeeCode;
+    const period = periodToQuery || assignmentPeriod;
+    if (!code) return;
+
+    try {
+      const url = `http://${window.location.hostname}:8000/api/appraisals/?employee_code=${code}`;
+      const response = await fetch(url, {
+        headers: token ? { 'Authorization': `Token ${token}` } : {}
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const existing = data.find(sub => sub.assignment_period === period);
+        if (existing) {
+          setEditingAppraisalId(existing.id);
+          setScores({
+            job_competence: existing.job_competence,
+            productivity_responsibility: existing.productivity_responsibility,
+            communication_teamwork: existing.communication_teamwork,
+            professionalism_discipline: existing.professionalism_discipline,
+            initiative_improvement: existing.initiative_improvement
+          });
+          setDeductionDetails({
+            unapproved_absence: existing.total_deduction || 0,
+            late_attendance: 0,
+            misconduct: 0,
+            protocol_violation: 0,
+            written_warning: 0
+          });
+          if (existing.rating) {
+            setLocationStats(prev => ({
+              ...prev,
+              originalAppraisalRating: existing.rating
+            }));
+          }
+        } else {
+          setEditingAppraisalId(null);
+          setScores({
+            job_competence: 0,
+            productivity_responsibility: 0,
+            communication_teamwork: 0,
+            professionalism_discipline: 0,
+            initiative_improvement: 0
+          });
+          setDeductionDetails({
+            unapproved_absence: 0,
+            late_attendance: 0,
+            misconduct: 0,
+            protocol_violation: 0,
+            written_warning: 0
+          });
+          setLocationStats(prev => ({
+            ...prev,
+            originalAppraisalRating: null
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load existing appraisal draft', err);
     }
   };
 
@@ -266,17 +366,19 @@ export default function AppraisalForm({ token, user }) {
       isValid = false;
     }
 
-    // Check location-wise A/B grade limit
+    // Check department-wise A/B grade limit
     const ratingVal = getRatingText(performanceTotal - totalDeduction);
     const isCurrentRatingAB = ratingVal.includes('(A)') || ratingVal.includes('(B)');
-    if (isCurrentRatingAB && locationStats.activeStaff > 0) {
-      const originalIsAB = locationStats.originalAppraisalRating && 
-        (locationStats.originalAppraisalRating.includes('(A)') || locationStats.originalAppraisalRating.includes('(B)'));
-      const adjustedExistingAB = originalIsAB ? locationStats.existingAB - 1 : locationStats.existingAB;
-      const maxAllowedAB = Math.max(1, Math.ceil(locationStats.activeStaff * 0.5));
+    const isManagerPool = (department && (department.trim().toLowerCase().includes('manager pool') || department.trim().toLowerCase().includes('manger pool'))) ||
+                          (location && (location.trim().toLowerCase().includes('manager pool') || location.trim().toLowerCase().includes('manger pool')));
+    if (isCurrentRatingAB && departmentStats.activeStaff > 0 && !isManagerPool) {
+      const originalIsAB = departmentStats.originalAppraisalRating && 
+        (departmentStats.originalAppraisalRating.includes('(A)') || departmentStats.originalAppraisalRating.includes('(B)'));
+      const adjustedExistingAB = originalIsAB ? departmentStats.existingAB - 1 : departmentStats.existingAB;
+      const maxAllowedAB = Math.max(1, Math.ceil(departmentStats.activeStaff * 0.5));
       
       if (adjustedExistingAB >= maxAllowedAB) {
-        errors.ratingLimit = `Location Grade Limit Exceeded: Only ${maxAllowedAB} out of ${locationStats.activeStaff} active staff in '${location}' can receive Grade A or B. Already assigned: ${adjustedExistingAB}. Please assign another grade.`;
+        errors.ratingLimit = `Grade Limit Exceeded: Only ${maxAllowedAB} out of ${departmentStats.activeStaff} active staff in ${location ? `location '${location}'` : `department '${department}'`} can receive Grade A or B. Already assigned: ${adjustedExistingAB}. Please assign another grade.`;
         isValid = false;
       }
     }
@@ -302,6 +404,7 @@ export default function AppraisalForm({ token, user }) {
         employee_name: employeeName,
         department,
         location,
+        branch: branch || selectedBranch || '',
         designation,
         date_of_joining: dateOfJoining,
         assignment_period: assignmentPeriod,
@@ -400,6 +503,7 @@ export default function AppraisalForm({ token, user }) {
       written_warning: 0
     });
     
+    setEmployeeCode(appraisal.employee_code);
     setEmployeeName(appraisal.employee_name);
     setDepartment(appraisal.department);
     setLocation(appraisal.location || '');
@@ -408,17 +512,20 @@ export default function AppraisalForm({ token, user }) {
     setAssignmentPeriod(appraisal.assignment_period);
 
     try {
-      const response = await fetch(`http://${window.location.hostname}:8000/api/employees/fetch/?code=${appraisal.employee_code}`);
+      const response = await fetch(`http://${window.location.hostname}:8000/api/employees/fetch/?code=${appraisal.employee_code}`, {
+        headers: token ? { 'Authorization': `Token ${token}` } : {}
+      });
       if (response.ok) {
         const data = await response.json();
-        setLocationStats({
-          activeStaff: data.location_total_active || 0,
-          existingAB: data.location_existing_ab || 0,
+        const useLocCount = data.location && data.location_total_active > 0;
+        setDepartmentStats({
+          activeStaff: useLocCount ? data.location_total_active : (data.department_total_active || 0),
+          existingAB: useLocCount ? data.location_existing_ab : (data.department_existing_ab || 0),
           originalAppraisalRating: appraisal.rating
         });
       }
     } catch (err) {
-      console.error('Error fetching location stats for draft edit', err);
+      console.error('Error fetching department stats for draft edit', err);
     }
     
     setActiveTab('form');
@@ -557,13 +664,15 @@ export default function AppraisalForm({ token, user }) {
   const ratingText = getRatingText(finalScore);
   const isCurrentRatingAB = ratingText.includes('(A)') || ratingText.includes('(B)');
   
-  const originalIsAB = locationStats.originalAppraisalRating && 
-    (locationStats.originalAppraisalRating.includes('(A)') || locationStats.originalAppraisalRating.includes('(B)'));
+  const originalIsAB = departmentStats.originalAppraisalRating && 
+    (departmentStats.originalAppraisalRating.includes('(A)') || departmentStats.originalAppraisalRating.includes('(B)'));
   
-  const adjustedExistingAB = originalIsAB ? locationStats.existingAB - 1 : locationStats.existingAB;
-  const maxAllowedAB = Math.max(1, Math.ceil(locationStats.activeStaff * 0.5));
+  const adjustedExistingAB = originalIsAB ? departmentStats.existingAB - 1 : departmentStats.existingAB;
+  const maxAllowedAB = Math.max(1, Math.ceil(departmentStats.activeStaff * 0.5));
   
-  const isLimitExceeded = isCurrentRatingAB && (locationStats.activeStaff > 0) && (adjustedExistingAB >= maxAllowedAB);
+  const isManagerPool = (department && (department.trim().toLowerCase().includes('manager pool') || department.trim().toLowerCase().includes('manger pool'))) ||
+                        (location && (location.trim().toLowerCase().includes('manager pool') || location.trim().toLowerCase().includes('manger pool')));
+  const isLimitExceeded = isCurrentRatingAB && (departmentStats.activeStaff > 0) && (adjustedExistingAB >= maxAllowedAB) && !isManagerPool;
 
   return (
     <div style={{ maxWidth: '1020px', margin: '0 auto', fontFamily: '"Inter", sans-serif', paddingBottom: '40px', transition: 'all 0.3s ease' }}>
@@ -576,8 +685,52 @@ export default function AppraisalForm({ token, user }) {
         </div>
       )}
 
-      {/* Main Access Card if not fetched */}
-      {!initialCode && !employeeName && (
+      {/* STICKY TAB HEADER: Always visible */}
+      <div 
+        style={{ 
+          position: 'sticky', 
+          top: '0', 
+          zIndex: '99', 
+          backgroundColor: '#f8fafc', 
+          borderBottom: `2px solid ${borderLight}`,
+          padding: '12px 0 6px',
+          margin: '0 -24px 20px',
+          paddingLeft: '24px',
+          paddingRight: '24px',
+          display: 'flex',
+          gap: '12px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+        }}
+      >
+        <button 
+          className={`tab-btn ${activeTab === 'form' ? 'active' : ''}`}
+          onClick={() => setActiveTab('form')}
+          style={{ 
+            color: activeTab === 'form' ? primaryBlue : textMedium, 
+            borderBottomColor: activeTab === 'form' ? primaryBlue : 'transparent',
+            fontWeight: '600',
+            paddingBottom: '8px'
+          }}
+        >
+          <FileText size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+          {editingAppraisalId ? 'Edit Appraisal Draft' : 'Appraisal Form'}
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'list' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('list'); fetchMySubmissions(employeeCode); }}
+          style={{ 
+            color: activeTab === 'list' ? primaryBlue : textMedium, 
+            borderBottomColor: activeTab === 'list' ? primaryBlue : 'transparent',
+            fontWeight: '600',
+            paddingBottom: '8px'
+          }}
+        >
+          <History size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+          My Appraisals ({mySubmissions.length})
+        </button>
+      </div>
+
+      {activeTab === 'form' && !(employeeName || initialCode) && (
         <div 
           style={{ 
             marginBottom: '24px', 
@@ -832,56 +985,8 @@ export default function AppraisalForm({ token, user }) {
         </div>
       )}
 
-      {/* Form Tabs and Layout */}
-      {(employeeName || initialCode) && (
-        <>
-          {/* STICKY TAB HEADER: Sticks at the top when scrolling down */}
-          <div 
-            style={{ 
-              position: 'sticky', 
-              top: '0', 
-              zIndex: '99', 
-              backgroundColor: '#f8fafc', 
-              borderBottom: `2px solid ${borderLight}`,
-              padding: '12px 0 6px',
-              margin: '0 -24px 20px',
-              paddingLeft: '24px',
-              paddingRight: '24px',
-              display: 'flex',
-              gap: '12px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
-            }}
-          >
-            <button 
-              className={`tab-btn ${activeTab === 'form' ? 'active' : ''}`}
-              onClick={() => setActiveTab('form')}
-              style={{ 
-                color: activeTab === 'form' ? primaryBlue : textMedium, 
-                borderBottomColor: activeTab === 'form' ? primaryBlue : 'transparent',
-                fontWeight: '600',
-                paddingBottom: '8px'
-              }}
-            >
-              <FileText size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
-              {editingAppraisalId ? 'Edit Appraisal Draft' : 'Appraisal Form'}
-            </button>
-            <button 
-              className={`tab-btn ${activeTab === 'list' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('list'); fetchMySubmissions(employeeCode); }}
-              style={{ 
-                color: activeTab === 'list' ? primaryBlue : textMedium, 
-                borderBottomColor: activeTab === 'list' ? primaryBlue : 'transparent',
-                fontWeight: '600',
-                paddingBottom: '8px'
-              }}
-            >
-              <History size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
-              My Appraisals ({mySubmissions.length})
-            </button>
-          </div>
-
-          {activeTab === 'form' ? (
-            <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {activeTab === 'form' && (employeeName || initialCode) && (
+        <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               
               {/* FETCHING SKELETON: Display pulsing outline cards while loading details */}
               {fetching ? (
@@ -941,7 +1046,7 @@ export default function AppraisalForm({ token, user }) {
                               className="form-control"
                               value={employeeCode}
                               onChange={(e) => setEmployeeCode(e.target.value)}
-                              disabled={!isAdmin || !!initialCode}
+                              disabled={!isAdmin || (!!initialCode && !editingAppraisalId)}
                               required
                               style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
                             />
@@ -1084,20 +1189,29 @@ export default function AppraisalForm({ token, user }) {
                           <span style={{ fontSize: '28px', fontWeight: '800', color: primaryBlue, fontFamily: 'Outfit' }}>{finalScore}</span>
                         </div>
 
-                        {locationStats.activeStaff > 0 && (
+                        {departmentStats.activeStaff > 0 && (
                           <div style={{ borderTop: `1px dashed ${borderLight}`, paddingTop: '12px', marginTop: '12px', fontSize: '12px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', color: textMedium, marginBottom: '4px' }}>
-                              <span>Location Active Staff:</span>
-                              <strong style={{ color: textDark }}>{locationStats.activeStaff}</strong>
+                              <span>{location ? 'Loc Active Staff:' : 'Dept Active Staff:'}</span>
+                              <strong style={{ color: textDark }}>{departmentStats.activeStaff}</strong>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', color: textMedium, marginBottom: '4px' }}>
-                              <span>Location Grade A/B Limit:</span>
-                              <strong style={{ color: textDark }}>{maxAllowedAB}</strong>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', color: textMedium }}>
-                              <span>Location Existing A/B:</span>
-                              <strong style={{ color: textDark }}>{adjustedExistingAB}</strong>
-                            </div>
+                            {!isManagerPool ? (
+                              <>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', color: textMedium, marginBottom: '4px' }}>
+                                  <span>{location ? 'Loc Grade A/B Limit:' : 'Dept Grade A/B Limit:'}</span>
+                                  <strong style={{ color: textDark }}>{maxAllowedAB}</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', color: textMedium }}>
+                                  <span>{location ? 'Loc Existing A/B:' : 'Dept Existing A/B:'}</span>
+                                  <strong style={{ color: textDark }}>{adjustedExistingAB}</strong>
+                                </div>
+                              </>
+                            ) : (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', color: textMedium }}>
+                                <span>{location ? 'Loc Grade A/B Limit:' : 'Dept Grade A/B Limit:'}</span>
+                                <strong style={{ color: '#16a34a' }}>No Limit (Manager Pool)</strong>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1137,7 +1251,7 @@ export default function AppraisalForm({ token, user }) {
                             <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '1px', color: '#dc2626' }} />
                             <div>
                               <strong style={{ display: 'block', marginBottom: '2px' }}>Grade Limit Exceeded</strong>
-                              Only 50% of staff in <strong>{location}</strong> can receive Grade A or B (Max allowed: <strong>{maxAllowedAB}</strong> out of <strong>{locationStats.activeStaff}</strong> active staff). Already assigned: <strong>{adjustedExistingAB}</strong>. Please assign to another grade.
+                              Only 50% of staff in {location ? 'location' : 'department'} <strong>{location || department}</strong> can receive Grade A or B (Max allowed: <strong>{maxAllowedAB}</strong> out of <strong>{departmentStats.activeStaff}</strong> active staff). Already assigned: <strong>{adjustedExistingAB}</strong>. Please assign to another grade.
                             </div>
                           </div>
                         )}
@@ -1457,8 +1571,10 @@ export default function AppraisalForm({ token, user }) {
                 </>
               )}
 
-            </form>
-          ) : (
+        </form>
+      )}
+
+      {activeTab === 'list' && (
             
             // Tab 2: My Appraisals Submission History List (Light styled)
             <div 
@@ -1470,9 +1586,14 @@ export default function AppraisalForm({ token, user }) {
                 boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
               }}
             >
-              <h2 style={{ fontSize: '16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', color: textDark, fontWeight: '750' }}>
-                <History size={18} style={{ color: primaryBlue }} />
-                <span>Submitted Appraisals History</span>
+              <h2 style={{ fontSize: '16px', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: textDark, fontWeight: '750' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <History size={18} style={{ color: primaryBlue }} />
+                  <span>Submitted Appraisals History</span>
+                </div>
+                <span style={{ fontSize: '13px', fontWeight: '600', color: primaryBlue, backgroundColor: lightBlueBg, padding: '3px 10px', borderRadius: '12px', border: `1px solid ${borderLight}` }}>
+                  Total: {mySubmissions.length} {mySubmissions.length === 1 ? 'record' : 'records'}
+                </span>
               </h2>
 
               {/* SKELETON LOADER FOR HISTORY LIST */}
@@ -1484,14 +1605,15 @@ export default function AppraisalForm({ token, user }) {
                 </div>
               ) : mySubmissions.length === 0 ? (
                 <p style={{ color: textMedium, fontSize: '13px', textAlign: 'center', padding: '30px' }}>
-                  No appraisals submitted for this employee code yet.
+                  {employeeCode ? 'No appraisals submitted for this employee code yet.' : 'No appraisals submitted yet.'}
                 </p>
               ) : (
                 <div className="table-container">
                   <table className="data-table" style={{ fontSize: '13px' }}>
                     <thead>
                       <tr style={{ backgroundColor: '#f8fafc' }}>
-                        <th style={{ color: textDark }}>ID</th>
+                        <th style={{ color: textDark }}>Employee Code</th>
+                        <th style={{ color: textDark }}>Staff Name</th>
                         <th style={{ color: textDark }}>Submission Date</th>
                         <th style={{ color: textDark }}>Period</th>
                         <th style={{ textAlign: 'center', color: textDark }}>Perf. Score</th>
@@ -1505,7 +1627,8 @@ export default function AppraisalForm({ token, user }) {
                     <tbody>
                       {mySubmissions.map((sub) => (
                         <tr key={sub.id} style={{ borderBottom: `1px solid ${borderLight}` }}>
-                          <td style={{ fontWeight: '600', color: textDark }}>{sub.id}</td>
+                          <td style={{ fontWeight: '600', color: textDark }}>{sub.employee_code}</td>
+                          <td style={{ fontWeight: '500', color: textDark }}>{sub.employee_name}</td>
                           <td style={{ color: textDark }}>{new Date(sub.submitted_date).toLocaleDateString()}</td>
                           <td style={{ color: textDark }}>{sub.assignment_period}</td>
                           <td style={{ textAlign: 'center', color: textDark }}>{sub.performance_score}</td>
@@ -1516,8 +1639,7 @@ export default function AppraisalForm({ token, user }) {
                           <td>
                             <span className={`rating-badge ${getRatingBadgeClass(sub.rating)}`}>
                               {sub.rating ? (() => {
-                                const match = sub.rating.match(/\(([^)]+)\)/);
-                                return match ? match[1] : sub.rating;
+                                return sub.rating.includes('(') ? sub.rating.split('(')[1].split(')')[0] : sub.rating;
                               })() : ''}
                             </span>
                           </td>
@@ -1583,8 +1705,6 @@ export default function AppraisalForm({ token, user }) {
                 </div>
               )}
             </div>
-          )}
-        </>
       )}
 
     </div>

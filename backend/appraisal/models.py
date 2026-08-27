@@ -2,23 +2,37 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.auth.models import User
 
+class Branch(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    class Meta:
+        verbose_name_plural = "Branches"
+
+    def __str__(self):
+        return self.name
+
+
 class Employee(models.Model):
     STATUS_CHOICES = [
         ('Active', 'Active'),
         ('Inactive', 'Inactive'),
     ]
 
-    employee_code = models.CharField(max_length=50, unique=True)
+    employee_code = models.CharField(max_length=50)
     name = models.CharField(max_length=100)
     department = models.CharField(max_length=100)
     location = models.CharField(max_length=100, blank=True, default='')
+    branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True, related_name='employees')
     designation = models.CharField(max_length=100)
     date_of_joining = models.DateField()
     assignment_period = models.CharField(max_length=100)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='Active')
 
+    class Meta:
+        unique_together = ('employee_code', 'department', 'location')
+
     def __str__(self):
-        return f"{self.employee_code} - {self.name}"
+        return f"{self.employee_code} - {self.name} ({self.department} / {self.location})"
 
 
 class Appraisal(models.Model):
@@ -35,6 +49,7 @@ class Appraisal(models.Model):
     employee_name = models.CharField(max_length=100)
     department = models.CharField(max_length=100)
     location = models.CharField(max_length=100, blank=True, default='')
+    branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True, related_name='appraisals')
     designation = models.CharField(max_length=100)
     date_of_joining = models.DateField()
     assignment_period = models.CharField(max_length=100)
@@ -89,3 +104,16 @@ class Appraisal(models.Model):
 
     def __str__(self):
         return f"Appraisal for {self.employee_code} - {self.employee_name} ({self.rating})"
+
+
+class DepartmentAdmin(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='department_admin')
+    departments = models.JSONField(default=list, help_text="List of tagged departments")
+    locations = models.JSONField(default=list, blank=True, help_text="List of tagged duty locations (optional)")
+    branches = models.JSONField(default=list, blank=True, help_text="List of tagged branches (optional)")
+
+    def __str__(self):
+        depts = ', '.join(self.departments) if self.departments else 'None'
+        locs = ', '.join(self.locations) if self.locations else 'All'
+        brs = ', '.join(self.branches) if self.branches else 'All'
+        return f"{self.user.username} - Depts: {depts} | Locs: {locs} | Branches: {brs}"

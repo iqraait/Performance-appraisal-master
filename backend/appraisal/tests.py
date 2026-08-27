@@ -302,3 +302,115 @@ class AppraisalLocationValidationTests(APITestCase):
         data2["initiative_improvement"] = 14
         response3 = self.client.post(self.appraisal_url, data2)
         self.assertEqual(response3.status_code, status.HTTP_201_CREATED)
+
+    def test_manager_pool_exempt_from_grade_limit(self):
+        """Staff in 'Manager pool' location are exempt from the 50% Grade A/B limit"""
+        # Create active employee in "Manager pool"
+        emp4 = Employee.objects.create(
+            employee_code="EMP104",
+            name="David",
+            department="Engineering",
+            location="Manager pool",
+            designation="Developer",
+            date_of_joining=datetime.date(2024, 1, 1),
+            assignment_period="Annual",
+            status="Active"
+        )
+        emp5 = Employee.objects.create(
+            employee_code="EMP105",
+            name="Emma",
+            department="Engineering",
+            location="Manager pool",
+            designation="Developer",
+            date_of_joining=datetime.date(2024, 1, 1),
+            assignment_period="Annual",
+            status="Active"
+        )
+        
+        # Submit first one as A (Score 100)
+        data1 = {
+            "employee_code": "EMP104",
+            "employee_name": "David",
+            "department": "Engineering",
+            "location": "Manager pool",
+            "designation": "Developer",
+            "date_of_joining": "2024-01-01",
+            "assignment_period": "Annual",
+            "job_competence": 20,
+            "productivity_responsibility": 20,
+            "communication_teamwork": 20,
+            "professionalism_discipline": 20,
+            "initiative_improvement": 20,
+            "total_deduction": 0
+        }
+        response1 = self.client.post(self.appraisal_url, data1)
+        self.assertEqual(response1.status_code, status.HTTP_201_CREATED)
+
+        # Submit second one as A (Score 100) - Should also succeed because it's in Manager pool
+        data2 = {
+            "employee_code": "EMP105",
+            "employee_name": "Emma",
+            "department": "Engineering",
+            "location": "Manager pool",
+            "designation": "Developer",
+            "date_of_joining": "2024-01-01",
+            "assignment_period": "Annual",
+            "job_competence": 20,
+            "productivity_responsibility": 20,
+            "communication_teamwork": 20,
+            "professionalism_discipline": 20,
+            "initiative_improvement": 20,
+            "total_deduction": 0
+        }
+        response2 = self.client.post(self.appraisal_url, data2)
+        self.assertEqual(response2.status_code, status.HTTP_201_CREATED)
+
+
+class EmployeeAutoFetchTests(APITestCase):
+    def setUp(self):
+        from appraisal.models import DepartmentAdmin
+        # Create department admin user
+        self.dept_admin_user = User.objects.create_user('admin101', 'admin101@test.com', 'adminpass')
+        self.dept_admin = DepartmentAdmin.objects.create(
+            user=self.dept_admin_user,
+            departments=["Engineering"],
+            locations=["Manager pool"]
+        )
+
+        # Create multi-location employee (same code, different locations)
+        self.emp_disallowed = Employee.objects.create(
+            employee_code="EMP001",
+            name="Multi Location Staff",
+            department="Engineering",
+            location="Disallowed Clinic",
+            designation="Developer",
+            date_of_joining=datetime.date(2024, 1, 1),
+            assignment_period="Annual",
+            status="Active"
+        )
+        self.emp_allowed = Employee.objects.create(
+            employee_code="EMP001",
+            name="Multi Location Staff",
+            department="Engineering",
+            location="Manager pool",
+            designation="Developer",
+            date_of_joining=datetime.date(2024, 1, 1),
+            assignment_period="Annual",
+            status="Active"
+        )
+
+        self.fetch_url = reverse('employee-fetch')
+
+    def test_dept_admin_can_fetch_multi_location_employee_with_at_least_one_allowed_location(self):
+        """
+        If a department admin queries an employee with multiple locations,
+        and at least one of those locations is allowed for the admin,
+        the fetch endpoint should succeed and return the allowed employee record.
+        """
+        self.client.force_authenticate(user=self.dept_admin_user)
+        response = self.client.get(f"{self.fetch_url}?code=EMP001")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['employee_code'], "EMP001")
+        # Should return the allowed record's location
+        self.assertEqual(response.data['location'], "Manager pool")
+
