@@ -20,7 +20,7 @@ import {
 export default function Sidebar({ user, onLogout, selectedBranch, setSelectedBranch, isOpen, onClose }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const isAdmin = user && user.is_staff;
+  const isAdmin = user && (user.is_staff || user.is_superuser || user.role === 'department_admin');
 
   const searchParams = new URLSearchParams(location.search);
   const currentTab = searchParams.get('tab');
@@ -114,10 +114,17 @@ export default function Sidebar({ user, onLogout, selectedBranch, setSelectedBra
       visible: isAdmin,
       children: [
         {
-          name: 'Training Master',
+          name: 'Training Directory',
           to: '/training',
           icon: <BookOpen size={18} />,
           isActive: () => location.pathname === '/training',
+          visible: isAdmin,
+        },
+        {
+          name: 'Trainee Assessment',
+          to: '/trainee-assessment',
+          icon: <FileText size={18} />,
+          isActive: () => location.pathname === '/trainee-assessment',
           visible: isAdmin,
         }
       ]

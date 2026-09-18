@@ -33,7 +33,11 @@ export default function Login({ onLoginSuccess }) {
 
       if (response.ok) {
         onLoginSuccess(data);
-        if (data.is_staff) {
+        const redirectUrl = sessionStorage.getItem('redirectUrl');
+        if (redirectUrl) {
+          sessionStorage.removeItem('redirectUrl');
+          navigate(redirectUrl);
+        } else if (data.is_staff) {
           navigate('/');
         } else {
           navigate('/appraise');

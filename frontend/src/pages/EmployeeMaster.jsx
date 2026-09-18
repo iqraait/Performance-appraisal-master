@@ -61,8 +61,10 @@ export default function EmployeeMaster({ token, user, selectedBranch }) {
   const [depts, setDepts] = useState([]);
   const [locs, setLocs] = useState([]);
   const [desigs, setDesigs] = useState([]);
+  const [deptLocationsMap, setDeptLocationsMap] = useState({});
 
   // Modals state
+
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -97,7 +99,9 @@ export default function EmployeeMaster({ token, user, selectedBranch }) {
     password: '',
     departments: '',
     locations: '',
-    branches: ''
+    branches: '',
+    whatsapp_number: '',
+    editingId: null
   });
 
   const fetchDeptAdmins = async () => {
@@ -117,13 +121,23 @@ export default function EmployeeMaster({ token, user, selectedBranch }) {
     try {
       const payload = {
         username: deptAdminForm.username,
-        password: deptAdminForm.password,
         departments: deptAdminForm.departments ? deptAdminForm.departments.split(',').map(s => s.trim()).filter(Boolean) : [],
         locations: deptAdminForm.locations ? deptAdminForm.locations.split(',').map(s => s.trim()).filter(Boolean) : [],
-        branches: deptAdminForm.branches ? deptAdminForm.branches.split(',').map(s => s.trim()).filter(Boolean) : []
+        branches: deptAdminForm.branches ? deptAdminForm.branches.split(',').map(s => s.trim()).filter(Boolean) : [],
+        whatsapp_number: deptAdminForm.whatsapp_number.trim()
       };
-      const res = await fetch(`http://${window.location.hostname}:8000/api/department-admins/`, {
-        method: 'POST',
+      if (deptAdminForm.password) {
+        payload.password = deptAdminForm.password;
+      }
+
+      const isEdit = !!deptAdminForm.editingId;
+      const url = isEdit 
+        ? `http://${window.location.hostname}:8000/api/department-admins/${deptAdminForm.editingId}/`
+        : `http://${window.location.hostname}:8000/api/department-admins/`;
+      const method = isEdit ? 'PATCH' : 'POST';
+
+      const res = await fetch(url, {
+        method: method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Token ${token}`
@@ -131,8 +145,8 @@ export default function EmployeeMaster({ token, user, selectedBranch }) {
         body: JSON.stringify(payload)
       });
       if (res.ok) {
-        triggerToast('Department Admin saved successfully!');
-        setDeptAdminForm({ username: '', password: '', departments: '', locations: '', branches: '' });
+        triggerToast(isEdit ? 'Department Admin updated successfully!' : 'Department Admin saved successfully!');
+        setDeptAdminForm({ username: '', password: '', departments: '', locations: '', branches: '', whatsapp_number: '', editingId: null });
         fetchDeptAdmins();
       } else {
         const errData = await res.json();
@@ -141,6 +155,18 @@ export default function EmployeeMaster({ token, user, selectedBranch }) {
     } catch (err) {
       triggerToast('Error saving department admin', 'error');
     }
+  };
+
+  const handleEditDeptAdmin = (da) => {
+    setDeptAdminForm({
+      username: da.user_detail?.username || da.username || '',
+      password: '',
+      departments: da.departments ? da.departments.join(', ') : '',
+      locations: da.locations ? da.locations.join(', ') : '',
+      branches: da.branches ? da.branches.join(', ') : '',
+      whatsapp_number: da.whatsapp_number || '',
+      editingId: da.id
+    });
   };
 
   // Alerts toast state
@@ -182,6 +208,27 @@ export default function EmployeeMaster({ token, user, selectedBranch }) {
   useEffect(() => {
     fetchEmployees();
   }, [search, deptFilter, locFilter, desigFilter, statusFilter, selectedBranch]);
+
+  // Load departments and locations from DB metadata
+  useEffect(() => {
+    const fetchMeta = async () => {
+      try {
+        const res = await fetch(`http://${window.location.hostname}:8000/api/meta/departments-locations/`, {
+          headers: { 'Authorization': `Token ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setDepts(data.departments || []);
+          setLocs(data.locations || []);
+          setDeptLocationsMap(data.department_locations || {});
+        }
+      } catch (err) {
+        console.error("Failed to load departments and locations", err);
+      }
+    };
+    if (token) fetchMeta();
+  }, [token]);
+
 
   const handleExportEmployees = () => {
     const exportUrl = `http://${window.location.hostname}:8000/api/employees/export-excel/?search=${search}&department=${deptFilter}&location=${locFilter}&designation=${desigFilter}&status=${statusFilter}&branch=${encodeURIComponent(selectedBranch || '')}`;
@@ -226,7 +273,9 @@ export default function EmployeeMaster({ token, user, selectedBranch }) {
       } else {
         const errors = await response.json();
         const errKey = Object.keys(errors)[0];
-        triggerToast(`Validation Error: ${errKey} - ${errors[errKey][0]}`, 'error');
+        const val = errors[errKey];
+        const msg = Array.isArray(val) ? val.join(', ') : (typeof val === 'object' ? JSON.stringify(val) : String(val));
+        triggerToast(`Save Failed: ${errKey ? `${errKey} - ${msg}` : 'Could not add employee'}`, 'error');
       }
     } catch (err) {
       triggerToast('Network error while adding employee', 'error');
@@ -267,7 +316,10 @@ export default function EmployeeMaster({ token, user, selectedBranch }) {
         fetchEmployees();
       } else {
         const errors = await response.json();
-        triggerToast(`Update failed: ${JSON.stringify(errors)}`, 'error');
+        const errKey = Object.keys(errors)[0];
+        const val = errors[errKey];
+        const msg = Array.isArray(val) ? val.join(', ') : (typeof val === 'object' ? JSON.stringify(val) : String(val));
+        triggerToast(`Update failed: ${errKey ? `${errKey} - ${msg}` : 'Could not update employee'}`, 'error');
       }
     } catch (err) {
       triggerToast('Network error while updating employee', 'error');
@@ -301,12 +353,13 @@ export default function EmployeeMaster({ token, user, selectedBranch }) {
       location: (user && user.role === 'department_admin' && user.locations?.length > 0) ? user.locations[0] : '',
       branch: selectedBranch || '',
       designation: '',
-      date_of_joining: '',
+      date_of_joining: new Date().toISOString().split('T')[0],
       assignment_period: 'April-2026 to June-2026',
       status: 'Active'
     });
     setActiveEmployee(null);
   };
+
 
   const handleFileChange = (e) => {
     setExcelFile(e.target.files[0]);
@@ -651,56 +704,54 @@ export default function EmployeeMaster({ token, user, selectedBranch }) {
               <div className="grid-cols-3">
                 <div className="form-group">
                   <label className="form-label">Department</label>
-                  {user && user.role === 'department_admin' ? (
-                    <select
-                      name="department"
-                      className="form-control"
-                      value={formData.department}
-                      onChange={handleInputChange}
-                      required
-                      style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: 'var(--border-color)' }}
-                    >
-                      {user.departments && user.departments.map(d => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      name="department"
-                      className="form-control"
-                      value={formData.department}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  )}
+                  <select
+                    name="department"
+                    className="form-control"
+                    value={formData.department}
+                    onChange={(e) => setFormData({ ...formData, department: e.target.value, location: '' })}
+                    required
+                    style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: 'var(--border-color)' }}
+                  >
+                    <option value="">-- Select Department --</option>
+                    {depts.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                    {formData.department && !depts.includes(formData.department) && (
+                      <option value={formData.department}>{formData.department}</option>
+                    )}
+                  </select>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Location</label>
-                  {user && user.role === 'department_admin' && user.locations?.length > 0 ? (
-                    <select
-                      name="location"
-                      className="form-control"
-                      value={formData.location}
-                      onChange={handleInputChange}
-                      required
-                      style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: 'var(--border-color)' }}
-                    >
-                      {user.locations.map(l => (
-                        <option key={l} value={l}>{l}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      name="location"
-                      className="form-control"
-                      value={formData.location}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  )}
+                  <select
+                    name="location"
+                    className="form-control"
+                    value={formData.location}
+                    onChange={handleInputChange}
+                    style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: 'var(--border-color)' }}
+                  >
+                    <option value="">-- Select Location --</option>
+                    {formData.department && deptLocationsMap[formData.department]?.length > 0 && (
+                      <optgroup label={`${formData.department} Locations`}>
+                        {deptLocationsMap[formData.department].map(l => (
+                          <option key={l} value={l}>{l}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label={formData.department ? "All Other Hospital Locations" : "All Hospital Locations"}>
+                      {locs
+                        .filter(l => !formData.department || !deptLocationsMap[formData.department]?.includes(l))
+                        .map(l => (
+                          <option key={l} value={l}>{l}</option>
+                        ))
+                      }
+                    </optgroup>
+                    {formData.location && !locs.includes(formData.location) && (
+                      <option value={formData.location}>{formData.location}</option>
+                    )}
+                  </select>
                 </div>
+
                 <div className="form-group">
                   <label className="form-label">Designation</label>
                   <input
@@ -792,56 +843,54 @@ export default function EmployeeMaster({ token, user, selectedBranch }) {
               <div className="grid-cols-3">
                 <div className="form-group">
                   <label className="form-label">Department</label>
-                  {user && user.role === 'department_admin' ? (
-                    <select
-                      name="department"
-                      className="form-control"
-                      value={formData.department}
-                      onChange={handleInputChange}
-                      required
-                      style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: 'var(--border-color)' }}
-                    >
-                      {user.departments && user.departments.map(d => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      name="department"
-                      className="form-control"
-                      value={formData.department}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  )}
+                  <select
+                    name="department"
+                    className="form-control"
+                    value={formData.department}
+                    onChange={handleInputChange}
+                    required
+                    style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: 'var(--border-color)' }}
+                  >
+                    <option value="">-- Select Department --</option>
+                    {depts.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                    {formData.department && !depts.includes(formData.department) && (
+                      <option value={formData.department}>{formData.department}</option>
+                    )}
+                  </select>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Location</label>
-                  {user && user.role === 'department_admin' && user.locations?.length > 0 ? (
-                    <select
-                      name="location"
-                      className="form-control"
-                      value={formData.location}
-                      onChange={handleInputChange}
-                      required
-                      style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: 'var(--border-color)' }}
-                    >
-                      {user.locations.map(l => (
-                        <option key={l} value={l}>{l}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      name="location"
-                      className="form-control"
-                      value={formData.location}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  )}
+                  <select
+                    name="location"
+                    className="form-control"
+                    value={formData.location}
+                    onChange={handleInputChange}
+                    style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: 'var(--border-color)' }}
+                  >
+                    <option value="">-- Select Location --</option>
+                    {formData.department && deptLocationsMap[formData.department]?.length > 0 && (
+                      <optgroup label={`${formData.department} Locations`}>
+                        {deptLocationsMap[formData.department].map(l => (
+                          <option key={l} value={l}>{l}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label={formData.department ? "All Other Hospital Locations" : "All Hospital Locations"}>
+                      {locs
+                        .filter(l => !formData.department || !deptLocationsMap[formData.department]?.includes(l))
+                        .map(l => (
+                          <option key={l} value={l}>{l}</option>
+                        ))
+                      }
+                    </optgroup>
+                    {formData.location && !locs.includes(formData.location) && (
+                      <option value={formData.location}>{formData.location}</option>
+                    )}
+                  </select>
                 </div>
+
                 <div className="form-group">
                   <label className="form-label">Designation</label>
                   <input
@@ -987,7 +1036,21 @@ export default function EmployeeMaster({ token, user, selectedBranch }) {
             </div>
             
             <form onSubmit={handleSaveDeptAdmin} style={{ marginBottom: '24px', backgroundColor: 'var(--bg-active)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-              <h3 style={{ fontSize: '14px', marginBottom: '12px', fontWeight: '600', color: 'var(--primary)' }}>Add / Tag Department Admin</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h3 style={{ fontSize: '14px', margin: 0, fontWeight: '600', color: 'var(--primary)' }}>
+                  {deptAdminForm.editingId ? 'Edit Department Admin' : 'Add / Tag Department Admin'}
+                </h3>
+                {deptAdminForm.editingId && (
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '11px', padding: '4px 8px' }}
+                    onClick={() => setDeptAdminForm({ username: '', password: '', departments: '', locations: '', branches: '', whatsapp_number: '', editingId: null })}
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+              </div>
               <div className="grid-cols-2" style={{ gap: '12px' }}>
                 <div className="form-group" style={{ marginBottom: '10px' }}>
                   <label className="form-label" style={{ fontSize: '12px' }}>Username</label>
@@ -998,30 +1061,43 @@ export default function EmployeeMaster({ token, user, selectedBranch }) {
                     value={deptAdminForm.username}
                     onChange={(e) => setDeptAdminForm({ ...deptAdminForm, username: e.target.value })}
                     required
+                    disabled={!!deptAdminForm.editingId}
                   />
                 </div>
                 <div className="form-group" style={{ marginBottom: '10px' }}>
-                  <label className="form-label" style={{ fontSize: '12px' }}>Password</label>
+                  <label className="form-label" style={{ fontSize: '12px' }}>{deptAdminForm.editingId ? 'New Password (Optional)' : 'Password'}</label>
                   <input
                     type="password"
                     className="form-control"
-                    placeholder="Set password"
+                    placeholder={deptAdminForm.editingId ? "Leave blank to keep unchanged" : "Set password"}
                     value={deptAdminForm.password}
                     onChange={(e) => setDeptAdminForm({ ...deptAdminForm, password: e.target.value })}
                   />
                 </div>
               </div>
 
-              <div className="form-group" style={{ marginBottom: '10px' }}>
-                <label className="form-label" style={{ fontSize: '12px' }}>Departments (Comma Separated)</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="e.g. Nursing, Pharmacy, OPD"
-                  value={deptAdminForm.departments}
-                  onChange={(e) => setDeptAdminForm({ ...deptAdminForm, departments: e.target.value })}
-                  required
-                />
+              <div className="grid-cols-2" style={{ gap: '12px' }}>
+                <div className="form-group" style={{ marginBottom: '10px' }}>
+                  <label className="form-label" style={{ fontSize: '12px' }}>Departments (Comma Separated)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. Nursing, Pharmacy, OPD"
+                    value={deptAdminForm.departments}
+                    onChange={(e) => setDeptAdminForm({ ...deptAdminForm, departments: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: '10px' }}>
+                  <label className="form-label" style={{ fontSize: '12px' }}>WhatsApp Number (e.g. 919876543210)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. 919876543210"
+                    value={deptAdminForm.whatsapp_number}
+                    onChange={(e) => setDeptAdminForm({ ...deptAdminForm, whatsapp_number: e.target.value })}
+                  />
+                </div>
               </div>
 
               <div className="grid-cols-2" style={{ gap: '12px' }}>
@@ -1048,33 +1124,50 @@ export default function EmployeeMaster({ token, user, selectedBranch }) {
               </div>
 
               <div style={{ textAlign: 'right', marginTop: '10px' }}>
-                <button type="submit" className="btn btn-primary btn-sm">Save Department Admin</button>
+                <button type="submit" className="btn btn-primary btn-sm">
+                  {deptAdminForm.editingId ? 'Update Department Admin' : 'Save Department Admin'}
+                </button>
               </div>
             </form>
 
             <h3 style={{ fontSize: '14px', marginBottom: '12px', fontWeight: '600' }}>Existing Department Admins</h3>
-            <div className="table-container" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+            <div className="table-container" style={{ maxHeight: '220px', overflowY: 'auto' }}>
               <table className="data-table" style={{ fontSize: '12px' }}>
                 <thead>
                   <tr>
                     <th>Username</th>
-                    <th>Tagged Departments</th>
+                    <th>Departments</th>
+                    <th>WhatsApp No.</th>
                     <th>Locations</th>
                     <th>Branches</th>
+                    <th style={{ textAlign: 'center' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {deptAdmins.length === 0 ? (
                     <tr>
-                      <td colSpan="4" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No Department Admins registered yet.</td>
+                      <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No Department Admins registered yet.</td>
                     </tr>
                   ) : (
                     deptAdmins.map((da) => (
                       <tr key={da.id}>
                         <td style={{ fontWeight: '600', color: 'var(--primary)' }}>{da.user_detail?.username || da.username}</td>
                         <td>{da.departments?.join(', ') || '-'}</td>
-                        <td>{da.locations?.length > 0 ? da.locations.join(', ') : 'All Locations'}</td>
-                        <td>{da.branches?.length > 0 ? da.branches.join(', ') : 'All Branches'}</td>
+                        <td style={{ fontFamily: 'monospace', color: da.whatsapp_number ? '#10b981' : '#94a3b8', fontWeight: '600' }}>
+                          {da.whatsapp_number || 'Not set'}
+                        </td>
+                        <td>{da.locations?.length > 0 ? da.locations.join(', ') : 'All'}</td>
+                        <td>{da.branches?.length > 0 ? da.branches.join(', ') : 'All'}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '2px 8px', fontSize: '11px' }}
+                            onClick={() => handleEditDeptAdmin(da)}
+                          >
+                            Edit
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}

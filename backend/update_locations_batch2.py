@@ -90,6 +90,8 @@ def run():
             not_found.append(emp_code)
             print(f"WARNING: Employee code {emp_code} not found in database.")
 
+        
+
     print(f"\n--- Batch 2 Update Complete ---")
     print(f"Successfully updated: {updated_count} employees.")
     if not_found:

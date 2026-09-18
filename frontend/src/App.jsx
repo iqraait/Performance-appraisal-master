@@ -7,6 +7,16 @@ import Dashboard from './pages/Dashboard';
 import EmployeeMaster from './pages/EmployeeMaster';
 import AppraisalForm from './pages/AppraisalForm';
 import AppraisalReports from './pages/AppraisalReports';
+import TrainingMaster from './pages/TrainingMaster';
+import TraineeAssessmentForm from './pages/TraineeAssessmentForm';
+
+function RedirectToLoginWithReturn() {
+  const loc = window.location.pathname + window.location.search;
+  if (loc && !loc.startsWith('/login')) {
+    sessionStorage.setItem('redirectUrl', loc);
+  }
+  return <Navigate to="/login" replace />;
+}
 
 function BranchSelector({ user, token, onSelectBranch }) {
   const [branches, setBranches] = useState(user?.branches || []);
@@ -253,7 +263,48 @@ function App() {
                 </div>
               )
             ) : (
-              <Navigate to="/login" replace />
+              <RedirectToLoginWithReturn />
+            )
+          } 
+        />
+
+        {/* Protected Dedicated Trainee Assessment Route (IIHRC/HRD/0007) */}
+        <Route 
+          path="/trainee-assessment" 
+          element={
+            isAuthenticated && isAdmin ? (
+              needsBranchSelection ? (
+                <BranchSelector user={user} token={token} onSelectBranch={handleSelectBranch} />
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                  <div className="mobile-top-bar no-print">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(true)}>
+                        <Menu size={22} />
+                      </button>
+                      <span style={{ fontSize: '16px', fontWeight: '700' }}>AppraisalPro</span>
+                    </div>
+                    {selectedBranch && (
+                      <span style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: '600' }}>
+                        {selectedBranch}
+                      </span>
+                    )}
+                  </div>
+                  <div className="app-container">
+                    <div className="no-print">
+                      <Sidebar user={user} onLogout={handleLogout} selectedBranch={selectedBranch} setSelectedBranch={setSelectedBranch} token={token} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+                    </div>
+                    <main className="main-content" style={{ padding: 0 }}>
+                      <div className="no-print">
+                        <TopHeader user={user} onLogout={handleLogout} />
+                      </div>
+                      <TraineeAssessmentForm token={token} user={user} selectedBranch={selectedBranch} />
+                    </main>
+                  </div>
+                </div>
+              )
+            ) : (
+              <RedirectToLoginWithReturn />
             )
           } 
         />
@@ -289,7 +340,8 @@ function App() {
                           <Route path="/" element={<Dashboard token={token} selectedBranch={selectedBranch} />} />
                           <Route path="/employees" element={<EmployeeMaster token={token} user={user} selectedBranch={selectedBranch} />} />
                           <Route path="/reports" element={<AppraisalReports token={token} user={user} selectedBranch={selectedBranch} />} />
-                          <Route path="/training" element={<div className="card" style={{ padding: '24px' }}><h2>Training Master</h2><p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Module setup. Content coming soon...</p></div>} />
+                          <Route path="/training" element={<TrainingMaster token={token} user={user} selectedBranch={selectedBranch} />} />
+                          <Route path="/trainee-assessment" element={<TraineeAssessmentForm token={token} user={user} selectedBranch={selectedBranch} />} />
                           <Route path="*" element={<Navigate to="/" replace />} />
                         </Routes>
                       </main>
@@ -300,7 +352,7 @@ function App() {
                 <Navigate to="/appraise" replace />
               )
             ) : (
-              <Navigate to="/login" replace />
+              <RedirectToLoginWithReturn />
             )
           }
         />

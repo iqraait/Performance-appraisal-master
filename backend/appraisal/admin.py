@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Employee, Appraisal, DepartmentAdmin, Branch
+from .models import Employee, Appraisal, DepartmentAdmin, Branch, TrainingEmployee, WhatsAppConfig, TraineeAssessment
 
 @admin.register(Branch)
 class BranchAdmin(admin.ModelAdmin):
@@ -73,8 +73,8 @@ class DepartmentAdminForm(forms.ModelForm):
 @admin.register(DepartmentAdmin)
 class DepartmentAdminAdmin(admin.ModelAdmin):
     form = DepartmentAdminForm
-    list_display = ('user', 'get_departments_display', 'get_locations_display', 'get_branches_display')
-    search_fields = ('user__username',)
+    list_display = ('user', 'whatsapp_number', 'get_departments_display', 'get_locations_display', 'get_branches_display')
+    search_fields = ('user__username', 'whatsapp_number')
     autocomplete_fields = ['user']
 
     class Media:
@@ -100,5 +100,27 @@ class DepartmentAdminAdmin(admin.ModelAdmin):
     def get_branches_display(self, obj):
         return ", ".join(obj.branches) if obj.branches else "All"
     get_branches_display.short_description = 'Branches'
+
+
+@admin.register(TrainingEmployee)
+class TrainingEmployeeAdmin(admin.ModelAdmin):
+    list_display = ('employee_code', 'name', 'department', 'branch', 'date_of_joining', 'training_end_date', 'status', 'whatsapp_notification_sent', 'whatsapp_notification_status')
+    list_filter = ('department', 'branch', 'status', 'whatsapp_notification_sent')
+    search_fields = ('employee_code', 'name', 'department')
+    readonly_fields = ('training_end_date', 'whatsapp_notification_date', 'created_at', 'updated_at')
+
+
+@admin.register(WhatsAppConfig)
+class WhatsAppConfigAdmin(admin.ModelAdmin):
+    list_display = ('__str__', 'phone_number_id', 'template_name', 'base_url', 'is_enabled', 'updated_at')
+
+
+@admin.register(TraineeAssessment)
+class TraineeAssessmentAdmin(admin.ModelAdmin):
+    list_display = ('trainee_code', 'name', 'department', 'total_score', 'percentage', 'performance_rating', 'status', 'created_at')
+    list_filter = ('department', 'performance_rating', 'status')
+    search_fields = ('trainee_code', 'name', 'department')
+    readonly_fields = ('total_score', 'percentage', 'performance_rating', 'created_at', 'updated_at')
+
 
 
