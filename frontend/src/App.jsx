@@ -9,6 +9,7 @@ import AppraisalForm from './pages/AppraisalForm';
 import AppraisalReports from './pages/AppraisalReports';
 import TrainingMaster from './pages/TrainingMaster';
 import TraineeAssessmentForm from './pages/TraineeAssessmentForm';
+import IncentiveMaster from './pages/IncentiveMaster';
 
 function RedirectToLoginWithReturn() {
   const loc = window.location.pathname + window.location.search;
@@ -57,9 +58,9 @@ function BranchSelector({ user, token, onSelectBranch }) {
 
   return (
     <div className="auth-wrapper">
-      <div className="auth-card" style={{ maxWidth: '440px', width: '90%', padding: '28px 24px' }}>
-        <div className="auth-header" style={{ marginBottom: '20px' }}>
-          <div style={{ display: 'inline-flex', padding: '14px', borderRadius: '16px', background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: '#ffffff', boxShadow: '0 8px 20px rgba(234, 88, 12, 0.3)', marginBottom: '16px' }}>
+      <div className="auth-card" style={{ maxWidth: '440px', width: '90%', padding: '32px 28px', borderRadius: '24px' }}>
+        <div className="auth-header" style={{ marginBottom: '22px' }}>
+          <div style={{ display: 'inline-flex', padding: '14px', borderRadius: '16px', background: 'linear-gradient(135deg, #0066ff, #003db3)', color: '#ffffff', boxShadow: '0 8px 24px rgba(0, 102, 255, 0.35)', marginBottom: '16px' }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/>
               <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/>
@@ -70,33 +71,36 @@ function BranchSelector({ user, token, onSelectBranch }) {
               <path d="M10 18h4"/>
             </svg>
           </div>
-          <h1 className="auth-logo" style={{ fontSize: '20px', fontWeight: '700' }}>Select Hospital Branch</h1>
-          <p className="auth-subtitle" style={{ marginTop: '4px', fontSize: '13px' }}>
+          <h1 className="auth-logo" style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a' }}>Select Hospital Branch</h1>
+          <p className="auth-subtitle" style={{ marginTop: '4px', fontSize: '13px', color: '#64748b' }}>
             Choose an assigned branch to view staff and start appraisals.
           </p>
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '20px' }}>
+          <div style={{ textAlign: 'center', padding: '24px' }}>
             <span className="spinner"></span>
             <p style={{ marginTop: '8px', color: 'var(--text-muted)', fontSize: '13px' }}>Loading branches...</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Hospital Branch</label>
+            <div className="form-group" style={{ marginBottom: 0, textAlign: 'left' }}>
+              <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Hospital Branch</label>
               <select
                 className="form-control"
                 value={selectedBranch}
                 onChange={(e) => setSelectedBranch(e.target.value)}
                 style={{
-                  fontSize: '13px',
+                  fontSize: '13.5px',
                   fontWeight: '600',
-                  padding: '10px 12px',
-                  color: '#000000',
-                  backgroundColor: '#ffffff',
-                  borderColor: 'var(--border-color, #cbd5e1)',
-                  borderRadius: '6px'
+                  padding: '11px 14px',
+                  color: '#0f172a',
+                  backgroundColor: '#f1f4f9',
+                  border: '1.5px solid #e2e8f0',
+                  borderRadius: '12px',
+                  width: '100%',
+                  outline: 'none',
+                  cursor: 'pointer'
                 }}
                 required
               >
@@ -114,18 +118,23 @@ function BranchSelector({ user, token, onSelectBranch }) {
               disabled={!selectedBranch || branches.length === 0}
               style={{
                 width: '100%',
-                padding: '10px 16px',
-                fontSize: '14px',
-                fontWeight: '600',
-                borderRadius: '6px',
-                marginTop: '4px'
+                padding: '13px 18px',
+                fontSize: '14.5px',
+                fontWeight: '700',
+                borderRadius: '12px',
+                marginTop: '4px',
+                background: 'linear-gradient(135deg, #0e3d8f 0%, #092c6c 100%)',
+                boxShadow: '0 8px 22px rgba(14, 61, 143, 0.35)',
+                border: 'none',
+                color: '#ffffff',
+                cursor: 'pointer'
               }}
             >
               Proceed to Dashboard →
             </button>
 
             {branches.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '12px', color: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.05)', borderRadius: '6px', fontSize: '12px' }}>
+              <div style={{ textAlign: 'center', padding: '12px', color: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.05)', borderRadius: '8px', fontSize: '12px' }}>
                 No branches assigned to your login account. Contact administrator.
               </div>
             )}
@@ -340,6 +349,7 @@ function App() {
                           <Route path="/" element={<Dashboard token={token} selectedBranch={selectedBranch} />} />
                           <Route path="/employees" element={<EmployeeMaster token={token} user={user} selectedBranch={selectedBranch} />} />
                           <Route path="/reports" element={<AppraisalReports token={token} user={user} selectedBranch={selectedBranch} />} />
+                          <Route path="/incentives" element={<IncentiveMaster token={token} user={user} selectedBranch={selectedBranch} />} />
                           <Route path="/training" element={<TrainingMaster token={token} user={user} selectedBranch={selectedBranch} />} />
                           <Route path="/trainee-assessment" element={<TraineeAssessmentForm token={token} user={user} selectedBranch={selectedBranch} />} />
                           <Route path="*" element={<Navigate to="/" replace />} />

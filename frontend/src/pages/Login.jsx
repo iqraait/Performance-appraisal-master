@@ -158,9 +158,10 @@ export default function Login({ onLoginSuccess }) {
           <svg className="hero-organic-curve" viewBox="0 0 60 600" preserveAspectRatio="none">
             <defs>
               <linearGradient id="heroCurveGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#0066ff" />
-                <stop offset="45%" stopColor="#0050d8" />
-                <stop offset="100%" stopColor="#00369c" />
+                <stop offset="0%" stopColor="#0284c7" />
+                <stop offset="32%" stopColor="#0062f5" />
+                <stop offset="68%" stopColor="#0040be" />
+                <stop offset="100%" stopColor="#002477" />
               </linearGradient>
             </defs>
             <path d="M0,0 Q60,180 20,380 Q-5,480 30,600 L0,600 Z" fill="url(#heroCurveGrad)" />
@@ -207,7 +208,7 @@ export default function Login({ onLoginSuccess }) {
                     <div className="hero-feature-icon">
                       <Building2 size={16} />
                     </div>
-                    <span>Multi-Branch Healthcare Network & HR Control</span>
+                    <span>Multi-Branch Hospital Network & HR Control</span>
                   </div>
 
                   <div className="hero-feature-item">
@@ -538,7 +539,7 @@ export default function Login({ onLoginSuccess }) {
 
               <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                 <div style={{ fontWeight: '600', color: '#0052cc', marginBottom: '4px' }}>📞 Internal IT Extension</div>
-                <div>Extension: <b>2200 / 2201</b> (24x7 Hospital IT Control)</div>
+                <div>Extension: <b>252, #514</b> (Hospital IT Support & Helpdesk)</div>
               </div>
 
               <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>

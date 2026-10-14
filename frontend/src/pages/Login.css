@@ -13,7 +13,11 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: radial-gradient(circle at 20% 20%, #0072ff 0%, #0056d6 30%, #003da8 65%, #002673 100%);
+  background: 
+    radial-gradient(circle at 12% 16%, rgba(56, 189, 248, 0.42) 0%, transparent 48%),
+    radial-gradient(circle at 88% 84%, rgba(37, 99, 235, 0.48) 0%, transparent 52%),
+    radial-gradient(circle at 50% 40%, rgba(30, 58, 138, 0.55) 0%, transparent 68%),
+    linear-gradient(138deg, #0056e0 0%, #003ea8 32%, #002677 68%, #001550 100%);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   box-sizing: border-box;
 }
@@ -22,28 +26,28 @@
 .iqraa-login-page::before {
   content: '';
   position: absolute;
-  width: 650px;
-  height: 650px;
+  width: 700px;
+  height: 700px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.25) 0%, rgba(0, 102, 255, 0.1) 50%, transparent 70%);
-  top: -150px;
-  left: -150px;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.3) 0%, rgba(0, 102, 255, 0.12) 50%, transparent 70%);
+  top: -180px;
+  left: -180px;
   pointer-events: none;
-  filter: blur(40px);
+  filter: blur(50px);
   animation: ambientFloat1 14s ease-in-out infinite alternate;
 }
 
 .iqraa-login-page::after {
   content: '';
   position: absolute;
-  width: 600px;
-  height: 600px;
+  width: 650px;
+  height: 650px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(96, 165, 250, 0.22) 0%, rgba(30, 64, 175, 0.12) 50%, transparent 70%);
-  bottom: -150px;
-  right: -100px;
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.28) 0%, rgba(30, 64, 175, 0.18) 50%, transparent 70%);
+  bottom: -180px;
+  right: -120px;
   pointer-events: none;
-  filter: blur(50px);
+  filter: blur(60px);
   animation: ambientFloat2 16s ease-in-out infinite alternate;
 }
 
@@ -105,7 +109,9 @@
    LEFT HERO BANNER PANEL
    ========================================================================== */
 .iqraa-hero-panel {
-  background: linear-gradient(145deg, #0066ff 0%, #0050d8 45%, #00369c 100%);
+  background: 
+    radial-gradient(circle at 20% 18%, rgba(56, 189, 248, 0.3) 0%, transparent 48%),
+    linear-gradient(150deg, #0284c7 0%, #0062f5 32%, #0040be 68%, #002477 100%);
   color: #ffffff;
   padding: 48px 46px;
   display: flex;
