@@ -17,6 +17,7 @@ import {
   Info,
   ChevronDown
 } from 'lucide-react';
+import iqraaLogo from '../assets/iqraa-logo.png';
 
 export default function AppraisalForm({ token, user, selectedBranch }) {
   const routeLocation = useLocation();
@@ -304,14 +305,13 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
     Number(scores.professionalism_discipline) +
     Number(scores.initiative_improvement);
 
-  const finalScore = performanceTotal - Number(totalDeduction);
+  const marksObtained = Math.max(0, performanceTotal - Number(totalDeduction));
+  // Score basis: (marks * 3) / 100 e.g. 100 marks -> 3.00, 99 marks -> 2.97
+  const finalScore = Number(((marksObtained * 3.0) / 100.0).toFixed(2));
+  const finalScoreFormatted = ((marksObtained * 3.0) / 100.0).toFixed(2);
 
   const getRatingText = (score) => {
-    if (score >= 90) return 'Outstanding (A)';
-    if (score >= 75) return 'Very Good (B)';
-    if (score >= 60) return 'Good (C)';
-    if (score >= 50) return 'Needs Improvement (D)';
-    return 'Unsatisfactory (E)';
+    return `${finalScoreFormatted} / 3.0`;
   };
 
   const handleScoreChange = (field, value) => {
@@ -575,8 +575,7 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
         </head>
         <body onload="window.print()">
           <div class="header">
-            <div style="font-size: 22px; font-weight: bold; color: #1a365d;">IQRAA</div>
-            <div style="font-size: 11px; text-transform: uppercase;">International Hospital & Research Centre</div>
+            <img src="/iqraa-logo.png" alt="IQRAA International Hospital & Research Centre" style="height: 48px; margin-bottom: 8px; object-fit: contain;" />
             <div class="title">PERFORMANCE APPRAISAL FORM</div>
           </div>
           <div class="grid">
@@ -1010,9 +1009,8 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${borderLight}`, paddingBottom: '12px', marginBottom: '16px' }}>
-                        <div>
-                          <h2 style={{ fontSize: '18px', color: primaryBlue, margin: 0, fontWeight: '700' }}>IQRAA Hospital</h2>
-                          <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', color: textMedium }}>Performance appraisal master</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <img src={iqraaLogo} alt="IQRAA Hospital" style={{ height: '36px', width: 'auto', objectFit: 'contain' }} />
                         </div>
                         <span 
                           style={{ 
@@ -1184,9 +1182,17 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                           <strong style={{ color: '#ef4444' }}>-{totalDeduction}</strong>
                         </div>
 
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px', color: textMedium }}>
+                          <span>Net Marks Obtained:</span>
+                          <strong style={{ color: textDark }}>{marksObtained} / 100</strong>
+                        </div>
+
                         <div style={{ borderTop: `1px solid ${borderLight}`, paddingTop: '12px', marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: '14px', fontWeight: '700', color: textDark }}>Final Score:</span>
-                          <span style={{ fontSize: '28px', fontWeight: '800', color: primaryBlue, fontFamily: 'Outfit' }}>{finalScore}</span>
+                          <div>
+                            <span style={{ fontSize: '14px', fontWeight: '700', color: textDark, display: 'block' }}>Final Score (L3):</span>
+                            <span style={{ fontSize: '11px', color: textMedium }}>(marks × 3 / 100)</span>
+                          </div>
+                          <span style={{ fontSize: '28px', fontWeight: '800', color: primaryBlue, fontFamily: 'Outfit' }}>{finalScoreFormatted}</span>
                         </div>
 
                         {departmentStats.activeStaff > 0 && (
@@ -1227,7 +1233,7 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                           transition: 'all 0.2s ease'
                         }}
                       >
-                        <span style={{ fontSize: '11px', textTransform: 'uppercase', color: primaryBlue, fontWeight: '700', letterSpacing: '0.05em' }}>Derived Grade</span>
+                        <span style={{ fontSize: '11px', textTransform: 'uppercase', color: primaryBlue, fontWeight: '700', letterSpacing: '0.05em' }}>Assessment Score (Level 3)</span>
                         <div style={{ fontSize: '16px', fontWeight: '700', color: textDark, marginTop: '2px' }}>
                           {ratingText}
                         </div>

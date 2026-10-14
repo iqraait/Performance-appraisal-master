@@ -10,6 +10,7 @@ import AppraisalReports from './pages/AppraisalReports';
 import TrainingMaster from './pages/TrainingMaster';
 import TraineeAssessmentForm from './pages/TraineeAssessmentForm';
 import IncentiveMaster from './pages/IncentiveMaster';
+import iqraaLogo from './assets/iqraa-logo.png';
 
 function RedirectToLoginWithReturn() {
   const loc = window.location.pathname + window.location.search;
@@ -291,7 +292,9 @@ function App() {
                       <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(true)}>
                         <Menu size={22} />
                       </button>
-                      <span style={{ fontSize: '16px', fontWeight: '700' }}>AppraisalPro</span>
+                      <div style={{ background: '#ffffff', padding: '2px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}>
+                        <img src={iqraaLogo} alt="IQRAA" style={{ height: '22px', width: 'auto', objectFit: 'contain' }} />
+                      </div>
                     </div>
                     {selectedBranch && (
                       <span style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: '600' }}>
@@ -333,7 +336,9 @@ function App() {
                         <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(true)}>
                           <Menu size={22} />
                         </button>
-                        <span style={{ fontSize: '16px', fontWeight: '700' }}>AppraisalPro</span>
+                        <div style={{ background: '#ffffff', padding: '2px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}>
+                          <img src={iqraaLogo} alt="IQRAA" style={{ height: '22px', width: 'auto', objectFit: 'contain' }} />
+                        </div>
                       </div>
                       {selectedBranch && (
                         <span style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: '600' }}>

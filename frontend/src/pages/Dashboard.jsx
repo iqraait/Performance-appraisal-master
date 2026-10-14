@@ -73,18 +73,19 @@ export default function Dashboard({ token, selectedBranch }) {
           <span 
             title={selectedBranch}
             style={{ 
-              backgroundColor: 'rgba(234, 88, 12, 0.08)', 
-              color: 'var(--accent)', 
-              padding: '5px 14px', 
+              backgroundColor: 'rgba(0, 102, 255, 0.08)', 
+              color: '#0052cc', 
+              padding: '6px 16px', 
               borderRadius: '20px', 
               fontSize: '12px', 
-              fontWeight: '600',
-              border: '1px solid rgba(234, 88, 12, 0.2)',
-              maxWidth: '280px',
+              fontWeight: '700',
+              border: '1px solid rgba(0, 102, 255, 0.22)',
+              maxWidth: '300px',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              display: 'inline-block'
+              display: 'inline-block',
+              boxShadow: '0 2px 8px rgba(0, 102, 255, 0.08)'
             }}
           >
             Branch: {selectedBranch}

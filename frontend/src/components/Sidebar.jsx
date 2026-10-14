@@ -14,8 +14,10 @@ import {
   Minus,
   Settings,
   BarChart3,
-  BookOpen
+  BookOpen,
+  Award
 } from 'lucide-react';
+import iqraaLogo from '../assets/iqraa-logo.png';
 
 export default function Sidebar({ user, onLogout, selectedBranch, setSelectedBranch, isOpen, onClose }) {
   const navigate = useNavigate();
@@ -103,6 +105,13 @@ export default function Sidebar({ user, onLogout, selectedBranch, setSelectedBra
           icon: <Users size={18} />,
           isActive: () => location.pathname === '/employees',
           visible: isAdmin,
+        },
+        {
+          name: 'Incentive Master',
+          to: '/incentives',
+          icon: <Award size={18} />,
+          isActive: () => location.pathname === '/incentives',
+          visible: isAdmin,
         }
       ]
     },
@@ -140,7 +149,14 @@ export default function Sidebar({ user, onLogout, selectedBranch, setSelectedBra
           name: 'Appraisal Report',
           to: '/reports',
           icon: <FileText size={18} />,
-          isActive: () => location.pathname === '/reports',
+          isActive: () => location.pathname === '/reports' && currentTab !== 'incentives',
+          visible: isAdmin,
+        },
+        {
+          name: 'Incentive Report',
+          to: '/reports?tab=incentives',
+          icon: <Award size={18} />,
+          isActive: () => location.pathname === '/reports' && currentTab === 'incentives',
           visible: isAdmin,
         }
       ]
@@ -186,13 +202,17 @@ export default function Sidebar({ user, onLogout, selectedBranch, setSelectedBra
       {isOpen && <div className="sidebar-overlay" onClick={onClose} />}
 
       <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
-        {isOpen && (
-          <div className="sidebar-logo" style={{ justifyContent: 'flex-end', marginBottom: '12px' }}>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+        {/* Sidebar Official Brand Logo */}
+        <div className="sidebar-brand-container" style={{ padding: '0 0 16px 0', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ background: '#ffffff', padding: '6px 12px', borderRadius: '10px', display: 'flex', alignItems: 'center', boxShadow: '0 4px 14px rgba(0,0,0,0.2)', width: '100%' }}>
+            <img src={iqraaLogo} alt="IQRAA Hospital" style={{ width: '100%', height: 'auto', maxHeight: '34px', objectFit: 'contain' }} />
+          </div>
+          {isOpen && (
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px', marginLeft: '8px' }}>
               <X size={20} />
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Sidebar Common Search Bar */}
         <div className="sidebar-search-container">

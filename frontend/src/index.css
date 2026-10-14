@@ -4,11 +4,11 @@
   --bg-primary: #f8fafc;
   --bg-secondary: #0f172a;
   --bg-card: #ffffff;
-  --bg-active: rgba(234, 88, 12, 0.08);
-  --primary: #1e3a8a; /* Dark Navy Blue */
-  --primary-hover: #1e40af;
-  --accent: #ea580c; /* Warm Orange Accent */
-  --accent-hover: #c2410c;
+  --bg-active: rgba(0, 102, 255, 0.08);
+  --primary: #0056e0; /* Royal Sapphire Blue */
+  --primary-hover: #0045be;
+  --accent: #0066ff; /* Vibrant Electric Blue Accent */
+  --accent-hover: #0052cc;
   --text-main: #0f172a;
   --text-muted: #475569;
   --text-subtle: #64748b;
@@ -144,14 +144,14 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .sidebar-link:hover svg {
-  color: var(--accent);
+  color: #0066ff;
 }
 
 .sidebar-link.active {
   color: #ffffff !important;
-  background: linear-gradient(135deg, var(--accent), #c2410c);
+  background: linear-gradient(135deg, #0066ff 0%, #004ecc 100%);
   transform: translateX(3px);
-  box-shadow: 0 4px 14px rgba(234, 88, 12, 0.3);
+  box-shadow: 0 4px 15px rgba(0, 102, 255, 0.35);
   font-weight: 600;
 }
 
@@ -319,7 +319,7 @@ h1, h2, h3, h4, h5, h6 {
 .form-control:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.15);
+  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
 }
 
 .form-control:disabled {
@@ -414,7 +414,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .card:hover {
-  border-color: rgba(234, 88, 12, 0.2);
+  border-color: rgba(0, 102, 255, 0.25);
   box-shadow: var(--shadow-md);
   transform: translateY(-2px);
 }
@@ -635,7 +635,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .chart-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--primary), var(--accent));
+  background: linear-gradient(90deg, #0056e0 0%, #00b4d8 100%);
   border-radius: 5px;
   transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
 }

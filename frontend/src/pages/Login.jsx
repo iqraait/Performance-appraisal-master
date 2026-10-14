@@ -16,6 +16,7 @@ import {
   X
 } from 'lucide-react';
 import './Login.css';
+import iqraaLogo from '../assets/iqraa-logo.png';
 
 export default function Login({ onLoginSuccess }) {
   const [username, setUsername] = useState('');
@@ -170,18 +171,20 @@ export default function Login({ onLoginSuccess }) {
           <div className="hero-content">
             {/* Top Hospital Identity Tag */}
             <div>
-              <div className="hospital-badge">
-                <div className="hospital-badge-icon">
-                  {/* Iqraa Emblem Icon */}
-                  <svg width="16" height="16" viewBox="0 0 100 100" fill="none">
-                    <circle cx="50" cy="50" r="46" stroke="#0052cc" strokeWidth="6" fill="#e0f2fe" />
-                    <ellipse cx="50" cy="50" rx="34" ry="16" stroke="#0052cc" strokeWidth="5" fill="none" transform="rotate(-25 50 50)" />
-                    <circle cx="50" cy="50" r="12" fill="#ef4444" />
-                    <circle cx="68" cy="38" r="4" fill="#0052cc" />
-                    <circle cx="32" cy="62" r="4" fill="#0052cc" />
-                  </svg>
-                </div>
-                <span className="hospital-badge-text">IQRAA Hospital & Research Centre</span>
+              <div style={{
+                background: '#ffffff',
+                padding: '8px 16px',
+                borderRadius: '14px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                boxShadow: '0 8px 24px rgba(0, 20, 60, 0.28)',
+                marginBottom: '22px'
+              }}>
+                <img 
+                  src={iqraaLogo} 
+                  alt="IQRAA International Hospital and Research Centre" 
+                  style={{ height: '40px', width: 'auto', objectFit: 'contain' }} 
+                />
               </div>
 
               {/* Main Typography Header */}
@@ -223,7 +226,7 @@ export default function Login({ onLoginSuccess }) {
 
             {/* Bottom Subtle Note */}
             <div className="hero-footer-note">
-              <span>• Kozhikode, Kerala • Secure Healthcare Enterprise</span>
+              <span>• Developed By IT Department • </span>
             </div>
           </div>
         </div>
@@ -515,12 +518,10 @@ export default function Login({ onLoginSuccess }) {
         <div className="iqraa-info-modal-overlay" onClick={() => setShowSupportModal(false)}>
           <div className="iqraa-info-modal-card" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0052cc' }}>
-                  <Building2 size={20} />
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <img src={iqraaLogo} alt="IQRAA Logo" style={{ height: '34px', width: 'auto', objectFit: 'contain' }} />
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>IQRAA SMART HUB Support</h3>
+                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#0f172a' }}>IQRAA SMART HUB Support</h3>
                   <span style={{ fontSize: '12px', color: '#64748b' }}>Hospital IT & HR Helpdesk</span>
                 </div>
               </div>
