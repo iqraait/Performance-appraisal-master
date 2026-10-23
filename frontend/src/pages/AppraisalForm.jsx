@@ -15,7 +15,9 @@ import {
   AlertTriangle,
   ChevronRight,
   Info,
-  ChevronDown
+  ChevronDown,
+  TrendingUp,
+  TrendingDown
 } from 'lucide-react';
 import iqraaLogo from '../assets/iqraa-logo.png';
 
@@ -92,6 +94,10 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
   
   // List of submissions for this code
   const [mySubmissions, setMySubmissions] = useState([]);
+
+  // Historical appraisals for the employee currently loaded in evaluation form
+  const [empHistory, setEmpHistory] = useState([]);
+  const [loadingEmpHistory, setLoadingEmpHistory] = useState(false);
 
   // Cascading dropdown states for public landing access
   const [allEmployees, setAllEmployees] = useState([]);
@@ -179,6 +185,7 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
       setEmployeeCode(code);
       fetchEmployeeDetails(code);
       fetchMySubmissions(code);
+      fetchEmployeeHistory(code);
       fetchExistingAppraisal(code, assignmentPeriod);
     } else {
       setEmployeeCode('');
@@ -205,14 +212,8 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
     }
   }, [user, selectedDept]);
 
-  // Pre-select location for Department Admin if they have assigned locations
-  useEffect(() => {
-    if (user && user.role === 'department_admin' && Array.isArray(user.locations) && user.locations.length > 0 && !selectedLoc) {
-      const firstLoc = user.locations[0];
-      setSelectedLoc(firstLoc);
-      setLocQuery(firstLoc);
-    }
-  }, [user, selectedLoc]);
+  // Location dropdown: by default nothing selected for department admin with multiple locations,
+  // allowing them to click and choose from the dropdown as requested.
 
   // Load active employees list for the cascading dropdown selection flow
   useEffect(() => {
@@ -278,6 +279,7 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
         
         triggerToast('Employee details fetched successfully!');
         fetchMySubmissions(code);
+        fetchEmployeeHistory(code);
         setValidationErrors(prev => ({ ...prev, employee: null }));
       } else {
         triggerToast(data.error || 'Employee not found', 'error');
@@ -310,6 +312,48 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
       setLoadingHistory(false);
     }
   };
+
+  const fetchEmployeeHistory = async (codeToQuery) => {
+    const code = (codeToQuery !== undefined && codeToQuery !== null) ? codeToQuery : employeeCode;
+    if (!code) {
+      setEmpHistory([]);
+      return;
+    }
+
+    setLoadingEmpHistory(true);
+    try {
+      const url = `http://${window.location.hostname}:8000/api/appraisals/?employee_code=${encodeURIComponent(code)}&all_periods=true`;
+      const response = await fetch(url, {
+        headers: token ? { 'Authorization': `Token ${token}` } : {}
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const sorted = Array.isArray(data) ? [...data].sort((a, b) => new Date(b.submitted_date || 0) - new Date(a.submitted_date || 0)) : [];
+        setEmpHistory(sorted);
+      }
+    } catch (err) {
+      console.error('Failed to load employee appraisal history', err);
+    } finally {
+      setLoadingEmpHistory(false);
+    }
+  };
+
+  const getScoreTierInfo = (score) => {
+    const s = Number(score) || 0;
+    if (s >= 2.70) return { label: '2.70 – 3.00 (Tier 1)', pct: '90% – 100%', color: '#00b87c', bg: '#ecfdf5', border: '#a7f3d0' };
+    if (s >= 2.25) return { label: '2.25 – 2.69 (Tier 2)', pct: '75% – 89%', color: '#0066ff', bg: '#eff6ff', border: '#bfdbfe' };
+    if (s >= 1.80) return { label: '1.80 – 2.24 (Tier 3)', pct: '60% – 74%', color: '#8b5cf6', bg: '#f5f3ff', border: '#ddd6fe' };
+    if (s >= 1.50) return { label: '1.50 – 1.79 (Tier 4)', pct: '50% – 59%', color: '#f97316', bg: '#fff7ed', border: '#fed7aa' };
+    return { label: '< 1.50 (Tier 5)', pct: 'Below 50%', color: '#ef4444', bg: '#fef2f2', border: '#fecaca' };
+  };
+
+  useEffect(() => {
+    if (employeeCode) {
+      fetchEmployeeHistory(employeeCode);
+    } else {
+      setEmpHistory([]);
+    }
+  }, [employeeCode]);
 
 
   const fetchExistingAppraisal = async (codeToQuery, periodToQuery) => {
@@ -1048,6 +1092,7 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                         setShowLocDropdown(true);
                       }}
                       onFocus={() => { if (selectedDept) setShowLocDropdown(true); }}
+                      onClick={() => { if (selectedDept) setShowLocDropdown(true); }}
                       onBlur={() => {
                         setTimeout(() => {
                           setLocQuery(selectedLoc || '');
@@ -1055,9 +1100,9 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                         }, 200);
                       }}
                       disabled={!selectedDept || (isDeptAdmin && adminLocs.length === 0)}
-                      style={{ fontSize: '13px', padding: '8px 36px 8px 12px', color: '#000000', backgroundColor: selectedDept && (!isDeptAdmin || adminLocs.length > 0) ? '#ffffff' : '#f1f5f9', borderColor: borderLight }}
+                      style={{ fontSize: '13px', padding: '8px 36px 8px 12px', color: '#000000', backgroundColor: selectedDept && (!isDeptAdmin || adminLocs.length > 0) ? '#ffffff' : '#f1f5f9', borderColor: borderLight, cursor: selectedDept ? 'pointer' : 'default' }}
                     />
-                    <ChevronDown size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: textMedium, pointerEvents: 'none' }} />
+                    <ChevronDown size={16} onClick={() => { if (selectedDept && (!isDeptAdmin || adminLocs.length > 0)) setShowLocDropdown(prev => !prev); }} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: textMedium, cursor: 'pointer' }} />
                   </div>
                   {showLocDropdown && selectedDept && (
                     <div style={{
@@ -1203,7 +1248,7 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
               ) : (
                 <>
                   {/* TWO COLUMN GRID: Employee Profile Details & Live Final Scores Side-by-Side */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '20px', alignItems: 'stretch' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '20px', alignItems: 'start' }}>
                     
                     {/* Left Card: Employee Information (White with Blue accents) */}
                     <div 
@@ -1488,6 +1533,217 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                               Under the rule ({ruleDesc}), in {location ? 'location' : 'department'} <strong>{location || department}</strong> only <strong>{maxAllowed}</strong> staff can receive scores in {thresholdLabel}. Already assigned: <strong>{adjustedExisting}</strong>. Please assign a score less than {thresholdScore} (&lt; {thresholdMarks}%).
                             </div>
                           </div>
+                        )}
+                      </div>
+
+                      {/* Previous Appraisals & Progress History Widget */}
+                      <div style={{ marginTop: '16px', borderTop: `1px solid ${borderLight}`, paddingTop: '14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                          <span style={{ fontSize: '12px', fontWeight: '700', color: textDark, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <TrendingUp size={14} color="#0066ff" />
+                            <span>Previous Appraisals &amp; Progress History ({empHistory.length})</span>
+                          </span>
+                          {loadingEmpHistory && (
+                            <span style={{ fontSize: '11px', color: textMedium }}>Loading...</span>
+                          )}
+                        </div>
+
+                        {empHistory.length === 0 ? (
+                          <div style={{ padding: '12px', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '6px', border: `1px dashed ${borderLight}`, color: textMedium, fontSize: '11.5px' }}>
+                            {loadingEmpHistory ? 'Loading history...' : 'No previous appraisals recorded (First Evaluation / Baseline)'}
+                          </div>
+                        ) : (
+                          <>
+                            {/* Performance Progress Graph / Comparison Bars */}
+                            {(() => {
+                              const previousAppr = empHistory.find(h => h.id !== editingAppraisalId) || empHistory[0];
+                              const currentScoreNum = Number(finalScoreFormatted) || 0;
+                              const prevScoreNum = Number(previousAppr?.final_score) || 0;
+                              const scoreDiff = previousAppr ? Number((currentScoreNum - prevScoreNum).toFixed(2)) : null;
+                              const markDiff = previousAppr && previousAppr.marks_obtained !== undefined ? (marksObtained - previousAppr.marks_obtained) : null;
+                              
+                              return (
+                                <div style={{ backgroundColor: '#f8fafc', border: `1px solid ${borderLight}`, borderRadius: '6px', padding: '10px 12px', marginBottom: '12px' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                    <span style={{ fontSize: '11px', fontWeight: '700', color: textDark, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                      Score Progress Graph
+                                    </span>
+                                    {scoreDiff !== null && previousAppr.id !== editingAppraisalId && (
+                                      <span style={{ 
+                                        display: 'inline-flex', 
+                                        alignItems: 'center', 
+                                        gap: '3px', 
+                                        fontSize: '11px', 
+                                        fontWeight: '700',
+                                        color: scoreDiff >= 0 ? '#059669' : '#dc2626',
+                                        backgroundColor: scoreDiff >= 0 ? '#ecfdf5' : '#fef2f2',
+                                        padding: '2px 6px',
+                                        borderRadius: '4px'
+                                      }}>
+                                        {scoreDiff >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                                        {scoreDiff >= 0 ? `+${scoreDiff}` : scoreDiff} pts {markDiff !== null ? `(${markDiff >= 0 ? `+${markDiff}` : markDiff} marks)` : ''} vs Prev
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Live Current Form Bar */}
+                                  <div style={{ marginBottom: '8px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '3px' }}>
+                                      <span style={{ fontWeight: '700', color: primaryBlue }}>
+                                        Current: {assignmentPeriod || 'July -- Sep'}
+                                      </span>
+                                      <span style={{ fontWeight: '700', color: primaryBlue }}>
+                                        {marksObtained} / 100 ({finalScoreFormatted} / 3.0)
+                                      </span>
+                                    </div>
+                                    <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                                      <div style={{ 
+                                        width: `${Math.min(100, Math.max(0, (currentScoreNum / 3.0) * 100))}%`, 
+                                        height: '100%', 
+                                        backgroundColor: primaryBlue,
+                                        borderRadius: '4px',
+                                        transition: 'width 0.3s ease'
+                                      }} />
+                                    </div>
+                                  </div>
+
+                                  {/* Previous Appraisals Bars */}
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    {empHistory.map((hist, hIdx) => {
+                                      const hScore = Number(hist.final_score || 0);
+                                      const hTier = getScoreTierInfo(hScore);
+                                      const isCurrEditing = hist.id === editingAppraisalId;
+                                      if (isCurrEditing) return null;
+                                      return (
+                                        <div key={hist.id || hIdx}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '2px' }}>
+                                            <span style={{ color: textDark, fontWeight: '600' }}>
+                                              {hist.assignment_period || 'Previous Period'}
+                                            </span>
+                                            <span style={{ fontWeight: '700', color: hTier.color }}>
+                                              {hist.marks_obtained !== undefined ? `${hist.marks_obtained} marks ` : ''}({hScore.toFixed(2)} / 3.0)
+                                            </span>
+                                          </div>
+                                          <div style={{ width: '100%', height: '7px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                                            <div style={{ 
+                                              width: `${Math.min(100, Math.max(0, (hScore / 3.0) * 100))}%`, 
+                                              height: '100%', 
+                                              backgroundColor: hTier.color,
+                                              borderRadius: '4px'
+                                            }} />
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {/* Previous Appraisals Table */}
+                            <div style={{ 
+                              border: `1px solid ${borderLight}`, 
+                              borderRadius: '6px', 
+                              overflowX: 'auto',
+                              backgroundColor: '#ffffff'
+                            }}>
+                              <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse', textAlign: 'left', minWidth: '420px' }}>
+                                <thead>
+                                  <tr style={{ backgroundColor: '#f8fafc', borderBottom: `1px solid ${borderLight}` }}>
+                                    <th style={{ padding: '6px 8px', fontWeight: '700', color: textDark }}>Period</th>
+                                    <th style={{ padding: '6px 8px', fontWeight: '700', color: textDark, textAlign: 'center' }}>Score (3.0)</th>
+                                    <th style={{ padding: '6px 8px', fontWeight: '700', color: textDark, textAlign: 'center' }}>Marks</th>
+                                    <th style={{ padding: '6px 8px', fontWeight: '700', color: textDark, textAlign: 'center' }}>Deductions</th>
+                                    <th style={{ padding: '6px 8px', fontWeight: '700', color: textDark, textAlign: 'center' }}>Rating Tier</th>
+                                    <th style={{ padding: '6px 8px', fontWeight: '700', color: textDark }}>Date</th>
+                                    <th style={{ padding: '6px 8px', fontWeight: '700', color: textDark, textAlign: 'center' }}>Progress</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {empHistory.map((appr, idx) => {
+                                    const t = getScoreTierInfo(appr.final_score);
+                                    const olderAppr = empHistory[idx + 1];
+                                    const scoreDiff = olderAppr ? Number((appr.final_score - olderAppr.final_score).toFixed(2)) : null;
+                                    const isCurr = appr.id === editingAppraisalId;
+                                    return (
+                                      <tr key={appr.id || idx} style={{ borderBottom: idx === empHistory.length - 1 ? 'none' : `1px solid ${borderLight}`, backgroundColor: isCurr ? '#f0f9ff' : 'transparent' }}>
+                                        <td style={{ padding: '6px 8px', fontWeight: '600', color: textDark, whiteSpace: 'nowrap' }}>
+                                          {appr.assignment_period || 'Annual'}
+                                          {idx === 0 && (
+                                            <span style={{ marginLeft: '4px', fontSize: '9px', backgroundColor: '#dbeafe', color: '#1e40af', padding: '1px 4px', borderRadius: '3px', fontWeight: 700 }}>
+                                              Latest
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: '700', color: primaryBlue }}>
+                                          {Number(appr.final_score || 0).toFixed(2)}
+                                        </td>
+                                        <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: '600', color: '#00b87c' }}>
+                                          {appr.marks_obtained !== undefined ? appr.marks_obtained : '-'}
+                                        </td>
+                                        <td style={{ padding: '6px 8px', textAlign: 'center', color: appr.total_deduction > 0 ? '#ef4444' : textMedium }}>
+                                          {appr.total_deduction ? `-${appr.total_deduction}` : '0'}
+                                        </td>
+                                        <td style={{ padding: '6px 8px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                          {appr.rating && appr.rating.includes('(') ? (
+                                            <span 
+                                              style={{ 
+                                                fontSize: '10px',
+                                                padding: '2px 6px',
+                                                borderRadius: '4px',
+                                                backgroundColor: appr.rating.includes('(A)') ? '#ecfdf5' : appr.rating.includes('(B)') ? '#eff6ff' : appr.rating.includes('(C)') ? '#f5f3ff' : appr.rating.includes('(D)') ? '#fff7ed' : '#fef2f2',
+                                                color: appr.rating.includes('(A)') ? '#00b87c' : appr.rating.includes('(B)') ? '#0066ff' : appr.rating.includes('(C)') ? '#8b5cf6' : appr.rating.includes('(D)') ? '#f97316' : '#ef4444',
+                                                border: `1px solid ${appr.rating.includes('(A)') ? '#a7f3d0' : appr.rating.includes('(B)') ? '#bfdbfe' : appr.rating.includes('(C)') ? '#ddd6fe' : appr.rating.includes('(D)') ? '#fed7aa' : '#fecaca'}`,
+                                                fontWeight: 700
+                                              }}
+                                            >
+                                              {appr.rating}
+                                            </span>
+                                          ) : t ? (
+                                            <span 
+                                              style={{ 
+                                                fontSize: '10px',
+                                                padding: '2px 6px',
+                                                borderRadius: '4px',
+                                                backgroundColor: t.bg,
+                                                color: t.color,
+                                                border: `1px solid ${t.border}`,
+                                                fontWeight: 700
+                                              }}
+                                            >
+                                              {t.label}
+                                            </span>
+                                          ) : '-'}
+                                        </td>
+                                        <td style={{ padding: '6px 8px', color: textMedium, fontSize: '10.5px', whiteSpace: 'nowrap' }}>
+                                          {appr.submitted_date ? new Date(appr.submitted_date).toLocaleDateString() : '-'}
+                                        </td>
+                                        <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                                          {scoreDiff !== null ? (
+                                            scoreDiff > 0 ? (
+                                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', color: '#059669', fontSize: '10px', fontWeight: 700, backgroundColor: '#ecfdf5', padding: '1px 5px', borderRadius: '4px' }}>
+                                                <TrendingUp size={10} />
+                                                +{scoreDiff}
+                                              </span>
+                                            ) : scoreDiff < 0 ? (
+                                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', color: '#dc2626', fontSize: '10px', fontWeight: 700, backgroundColor: '#fef2f2', padding: '1px 5px', borderRadius: '4px' }}>
+                                                <TrendingDown size={10} />
+                                                {scoreDiff}
+                                              </span>
+                                            ) : (
+                                              <span style={{ color: '#64748b', fontSize: '10px', fontWeight: 600 }}>0.00</span>
+                                            )
+                                          ) : (
+                                            <span style={{ color: '#94a3b8', fontSize: '10px', fontStyle: 'italic' }}>Baseline</span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </>
                         )}
                       </div>
                     </div>
