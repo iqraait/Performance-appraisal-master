@@ -1,0 +1,35 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('IQRAA Hospital Admin') }}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<link rel="stylesheet" type="text/css" href="{% static 'admin/css/vendor/select2/select2.css' %}">
+<link rel="stylesheet" type="text/css" href="{% static 'admin/css/modern_admin.css' %}">
+<link rel="icon" type="image/png" href="{% static 'admin/img/iqraa-logo.png' %}">
+{% endblock %}
+
+{% block branding %}
+<div id="site-name">
+  <a href="{% url 'admin:index' %}">
+    <span class="admin-header-logo-badge">
+      <img src="{% static 'admin/img/iqraa-logo.png' %}" alt="IQRAA Logo">
+    </span>
+    <div class="admin-header-title-wrap">
+      <span class="admin-header-title-main">IQRAA International Hospital & Research Centre</span>
+      <span class="admin-header-title-sub">Performance Appraisal & Admin Portal</span>
+    </div>
+  </a>
+</div>
+{% endblock %}
+
+{% block usertools %}
+<div class="admin-quick-nav">
+  <a href="/" target="_blank" class="admin-quick-nav-link" title="Open Main Application Dashboard">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+    <span>Frontend App</span>
+  </a>
+</div>
+{{ block.super }}
+{% endblock %}

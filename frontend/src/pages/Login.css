@@ -294,7 +294,7 @@
 }
 
 .hero-system-description {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
   color: rgba(235, 243, 255, 0.9);
   max-width: 410px;
@@ -320,7 +320,7 @@
   border: 1px solid rgba(255, 255, 255, 0.16);
   padding: 8px 14px;
   border-radius: 12px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: #ffffff;
   transition: all 0.25s ease;

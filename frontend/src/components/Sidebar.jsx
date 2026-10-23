@@ -15,14 +15,19 @@ import {
   Settings,
   BarChart3,
   BookOpen,
-  Award
+  Award,
+  MapPin
 } from 'lucide-react';
 import iqraaLogo from '../assets/iqraa-logo.png';
+import iqraaLogoWhite from '../assets/iqraa-logo-white.png';
 
 export default function Sidebar({ user, onLogout, selectedBranch, setSelectedBranch, isOpen, onClose }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const isAdmin = user && (user.is_staff || user.is_superuser || user.role === 'department_admin');
+  const isSuperOrStaff = user && (user.is_superuser || (user.is_staff && user.role !== 'department_admin'));
+  const isDeptAdmin = user && user.role === 'department_admin';
+  const isAdmin = isSuperOrStaff || isDeptAdmin;
+  const canSeeReports = isSuperOrStaff || isDeptAdmin;
 
   const searchParams = new URLSearchParams(location.search);
   const currentTab = searchParams.get('tab');
@@ -97,21 +102,28 @@ export default function Sidebar({ user, onLogout, selectedBranch, setSelectedBra
       id: 'masterConfig',
       name: 'Master Config',
       icon: <Settings size={18} />,
-      visible: isAdmin,
+      visible: isSuperOrStaff,
       children: [
         {
           name: 'Employee Master',
           to: '/employees',
           icon: <Users size={18} />,
           isActive: () => location.pathname === '/employees',
-          visible: isAdmin,
+          visible: isSuperOrStaff,
+        },
+        {
+          name: 'Location Master',
+          to: '/locations',
+          icon: <MapPin size={18} />,
+          isActive: () => location.pathname === '/locations',
+          visible: isSuperOrStaff,
         },
         {
           name: 'Incentive Master',
           to: '/incentives',
           icon: <Award size={18} />,
           isActive: () => location.pathname === '/incentives',
-          visible: isAdmin,
+          visible: isSuperOrStaff,
         }
       ]
     },
@@ -120,21 +132,21 @@ export default function Sidebar({ user, onLogout, selectedBranch, setSelectedBra
       id: 'trainingMaster',
       name: 'Training Master',
       icon: <BookOpen size={18} />,
-      visible: isAdmin,
+      visible: isSuperOrStaff,
       children: [
         {
           name: 'Training Directory',
           to: '/training',
           icon: <BookOpen size={18} />,
           isActive: () => location.pathname === '/training',
-          visible: isAdmin,
+          visible: isSuperOrStaff,
         },
         {
           name: 'Trainee Assessment',
           to: '/trainee-assessment',
           icon: <FileText size={18} />,
           isActive: () => location.pathname === '/trainee-assessment',
-          visible: isAdmin,
+          visible: isSuperOrStaff,
         }
       ]
     },
@@ -143,21 +155,21 @@ export default function Sidebar({ user, onLogout, selectedBranch, setSelectedBra
       id: 'reports',
       name: 'Reports',
       icon: <BarChart3 size={18} />,
-      visible: isAdmin,
+      visible: canSeeReports,
       children: [
         {
           name: 'Appraisal Report',
           to: '/reports',
           icon: <FileText size={18} />,
           isActive: () => location.pathname === '/reports' && currentTab !== 'incentives',
-          visible: isAdmin,
+          visible: canSeeReports,
         },
         {
           name: 'Incentive Report',
           to: '/reports?tab=incentives',
           icon: <Award size={18} />,
           isActive: () => location.pathname === '/reports' && currentTab === 'incentives',
-          visible: isAdmin,
+          visible: canSeeReports,
         }
       ]
     }
@@ -202,13 +214,18 @@ export default function Sidebar({ user, onLogout, selectedBranch, setSelectedBra
       {isOpen && <div className="sidebar-overlay" onClick={onClose} />}
 
       <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
-        {/* Sidebar Official Brand Logo */}
-        <div className="sidebar-brand-container" style={{ padding: '0 0 16px 0', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ background: '#ffffff', padding: '6px 12px', borderRadius: '10px', display: 'flex', alignItems: 'center', boxShadow: '0 4px 14px rgba(0,0,0,0.2)', width: '100%' }}>
-            <img src={iqraaLogo} alt="IQRAA Hospital" style={{ width: '100%', height: 'auto', maxHeight: '34px', objectFit: 'contain' }} />
+        {/* Sidebar Official Brand Logo (Light Background Box) */}
+        <div className="sidebar-brand-container">
+          <div className="sidebar-brand-header">
+            <img 
+              src={iqraaLogo} 
+              alt="IQRAA International Hospital and Research Centre" 
+              className="sidebar-brand-logo-img"
+              onError={(e) => { e.currentTarget.src = iqraaLogoWhite; }}
+            />
           </div>
           {isOpen && (
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px', marginLeft: '8px' }}>
+            <button onClick={onClose} className="sidebar-mobile-close" title="Close Menu">
               <X size={20} />
             </button>
           )}
@@ -216,9 +233,7 @@ export default function Sidebar({ user, onLogout, selectedBranch, setSelectedBra
 
         {/* Sidebar Common Search Bar */}
         <div className="sidebar-search-container">
-          <div className="sidebar-search-icon">
-            <Search size={16} />
-          </div>
+          <Search size={15} className="sidebar-search-icon" />
           <input
             type="text"
             className="sidebar-search-input"
@@ -232,24 +247,24 @@ export default function Sidebar({ user, onLogout, selectedBranch, setSelectedBra
               onClick={() => setSearchQuery('')}
               title="Clear search"
             >
-              <X size={14} />
+              <X size={13} />
             </button>
           )}
         </div>
 
-        <nav style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <nav className="sidebar-nav">
           <ul className="sidebar-menu">
             {filteredMenu.map(item => {
               if (item.type === 'link') {
                 return (
-                  <li key={item.name}>
+                  <li key={item.name} className="sidebar-menu-item">
                     <NavLink 
                       to={item.to} 
                       onClick={onClose} 
                       className={({ isActive }) => (item.isActive ? item.isActive() : isActive) ? 'sidebar-link active' : 'sidebar-link'}
                     >
-                      {item.icon}
-                      <span>{item.name}</span>
+                      <span className="sidebar-link-icon">{item.icon}</span>
+                      <span className="sidebar-link-text">{item.name}</span>
                     </NavLink>
                   </li>
                 );
@@ -258,15 +273,15 @@ export default function Sidebar({ user, onLogout, selectedBranch, setSelectedBra
                 return (
                   <li key={item.id} className="sidebar-module-group">
                     <div 
-                      className="sidebar-module-header"
+                      className={`sidebar-module-header ${expanded ? 'expanded' : ''}`}
                       onClick={() => toggleModule(item.id)}
                     >
                       <div className="sidebar-module-header-title">
-                        {item.icon}
-                        <span>{item.name}</span>
+                        <span className="sidebar-link-icon">{item.icon}</span>
+                        <span className="sidebar-link-text">{item.name}</span>
                       </div>
                       <div className="sidebar-module-toggle">
-                        {expanded ? <Minus size={14} /> : <Plus size={14} />}
+                        {expanded ? <Minus size={13} /> : <Plus size={13} />}
                       </div>
                     </div>
                     {expanded && (
@@ -276,10 +291,10 @@ export default function Sidebar({ user, onLogout, selectedBranch, setSelectedBra
                             key={child.name}
                             to={child.to} 
                             onClick={onClose}
-                            className={() => (child.isActive ? child.isActive() : location.pathname === child.to) ? 'sidebar-link active' : 'sidebar-link'}
+                            className={() => (child.isActive ? child.isActive() : location.pathname === child.to) ? 'sidebar-sublink active' : 'sidebar-sublink'}
                           >
-                            {child.icon}
-                            <span>{child.name}</span>
+                            <span className="sidebar-sublink-icon">{child.icon}</span>
+                            <span className="sidebar-sublink-text">{child.name}</span>
                           </NavLink>
                         ))}
                       </div>
@@ -291,47 +306,37 @@ export default function Sidebar({ user, onLogout, selectedBranch, setSelectedBra
             })}
           </ul>
 
+          {/* Bottom Active Branch Widget & Decorative Wave */}
           <div className="sidebar-footer">
-            {selectedBranch && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '14px', padding: '10px 12px', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#94a3b8', fontWeight: '700' }}>
-                    <Building2 size={12} color="var(--accent)" />
-                    <span>Active Branch</span>
-                  </div>
-                  <button
-                    onClick={handleSwitchBranch}
-                    title="Switch Branch"
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--accent)',
-                      fontSize: '11px',
-                      fontWeight: '600',
-                      textDecoration: 'underline',
-                      cursor: 'pointer',
-                      padding: 0
-                    }}
-                  >
-                    Switch
-                  </button>
+            <div className="sidebar-branch-card">
+              <div className="sidebar-branch-header">
+                <div className="sidebar-branch-status">
+                  <span className="sidebar-status-dot"></span>
+                  <span>ACTIVE BRANCH</span>
                 </div>
-                <div 
-                  title={selectedBranch}
-                  style={{ 
-                    fontSize: '12.5px', 
-                    fontWeight: '600', 
-                    color: '#ffffff',
-                    marginTop: '2px',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                  }}
+                <button
+                  onClick={handleSwitchBranch}
+                  title="Switch Branch"
+                  className="sidebar-branch-switch-btn"
                 >
-                  {selectedBranch}
-                </div>
+                  Switch
+                </button>
               </div>
-            )}
+              <div className="sidebar-branch-body">
+                <Building2 size={16} className="sidebar-branch-icon" />
+                <span className="sidebar-branch-name" title={selectedBranch || 'IQRAA INTERNATIONAL HOSPITAL'}>
+                  {selectedBranch || 'IQRAA INTERNATIONAL HO...'}
+                </span>
+              </div>
+            </div>
+
+            {/* Decorative Wavy Curve in Sidebar Bottom */}
+            <div className="sidebar-waves-bg" aria-hidden="true">
+              <svg viewBox="0 0 260 120" preserveAspectRatio="none" className="sidebar-wave-svg">
+                <path d="M0,45 C75,15 160,85 260,35 L260,120 L0,120 Z" fill="#0b245c" opacity="0.45" />
+                <path d="M0,75 C90,40 180,105 260,65 L260,120 L0,120 Z" fill="#0e327f" opacity="0.35" />
+              </svg>
+            </div>
           </div>
         </nav>
       </aside>

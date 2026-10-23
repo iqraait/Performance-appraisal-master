@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { Menu, LogOut } from 'lucide-react';
+import { Menu, LogOut, User, ChevronDown } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -10,6 +10,7 @@ import AppraisalReports from './pages/AppraisalReports';
 import TrainingMaster from './pages/TrainingMaster';
 import TraineeAssessmentForm from './pages/TraineeAssessmentForm';
 import IncentiveMaster from './pages/IncentiveMaster';
+import LocationMaster from './pages/LocationMaster';
 import iqraaLogo from './assets/iqraa-logo.png';
 
 function RedirectToLoginWithReturn() {
@@ -147,7 +148,7 @@ function BranchSelector({ user, token, onSelectBranch }) {
 }
 
 
-function TopHeader({ user, onLogout }) {
+function TopHeader({ user, onLogout, onToggleSidebar }) {
   const navigate = useNavigate();
   const isAdmin = user && user.is_staff;
 
@@ -158,16 +159,34 @@ function TopHeader({ user, onLogout }) {
 
   return (
     <div className="top-header">
-      <div className="top-header-user-info">
-        <span className="user-label">User Logged in:</span>
-        <span className="user-value" title={user ? user.username : ''}>
-          {user ? user.username : ''} {user && user.role === 'department_admin' ? `(${user.departments ? user.departments.join(', ') : ''})` : isAdmin ? '(Admin)' : '(Staff)'}
-        </span>
+      <div className="top-header-left">
+        <button 
+          className="top-header-menu-btn" 
+          onClick={onToggleSidebar}
+          title="Toggle Navigation"
+        >
+          <Menu size={20} />
+        </button>
       </div>
-      <button className="top-header-logout-btn" onClick={handleLogoutClick} title="Logout Account">
-        <LogOut size={14} />
-        <span>Logout</span>
-      </button>
+
+      <div className="top-header-right">
+        <div className="top-header-user-info">
+          <div className="top-header-user-avatar">
+            <User size={15} color="#0066ff" />
+          </div>
+          <div className="top-header-user-text">
+            <span className="user-label">User Logged in:</span>
+            <div className="user-value" title={user ? user.username : ''}>
+              <span>{user ? user.username : 'admin'} {user && user.role === 'department_admin' ? `(${user.departments ? user.departments.join(', ') : ''})` : isAdmin ? '(Admin)' : '(Staff)'}</span>
+              <ChevronDown size={13} className="user-dropdown-icon" />
+            </div>
+          </div>
+        </div>
+        <button className="top-header-logout-btn" onClick={handleLogoutClick} title="Logout Account">
+          <LogOut size={14} />
+          <span>Logout</span>
+        </button>
+      </div>
     </div>
   );
 }
@@ -181,6 +200,43 @@ function App() {
   });
   const [selectedBranch, setSelectedBranch] = useState(localStorage.getItem('selectedBranch') || '');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Live synchronization of user permissions and scope on load/refresh
+  useEffect(() => {
+    if (!token) return;
+    const syncProfile = async () => {
+      try {
+        const response = await fetch(`http://${window.location.hostname}:8000/api/auth/me/`, {
+          headers: { 'Authorization': `Token ${token}` }
+        });
+        if (response.ok) {
+          const freshData = await response.json();
+          setUser(prev => {
+            const updated = {
+              ...(prev || {}),
+              ...freshData
+            };
+            localStorage.setItem('user', JSON.stringify(updated));
+            return updated;
+          });
+
+          // Ensure selected branch remains valid or auto-selects
+          if (freshData.branches && freshData.branches.length > 0) {
+            const currentSelected = localStorage.getItem('selectedBranch');
+            if (!currentSelected || !freshData.branches.includes(currentSelected)) {
+              localStorage.setItem('selectedBranch', freshData.branches[0]);
+              setSelectedBranch(freshData.branches[0]);
+            }
+          }
+        } else if (response.status === 401 || response.status === 403) {
+          handleLogout();
+        }
+      } catch (err) {
+        console.error("Failed to sync current user profile", err);
+      }
+    };
+    syncProfile();
+  }, [token]);
 
   const handleLoginSuccess = (authData) => {
     localStorage.setItem('token', authData.token);
@@ -223,6 +279,7 @@ function App() {
   };
 
   const isAuthenticated = !!token;
+  const isDeptAdmin = user && user.role === 'department_admin';
   const isAdmin = user && user.is_staff;
   const needsBranchSelection = isAuthenticated && isAdmin && !selectedBranch;
 
@@ -266,7 +323,7 @@ function App() {
                   <div className="app-container">
                     <Sidebar user={user} onLogout={handleLogout} selectedBranch={selectedBranch} setSelectedBranch={setSelectedBranch} token={token} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
                     <main className="main-content">
-                      <TopHeader user={user} onLogout={handleLogout} />
+                      <TopHeader user={user} onLogout={handleLogout} onToggleSidebar={() => setIsSidebarOpen(prev => !prev)} />
                       <AppraisalForm token={token} user={user} selectedBranch={selectedBranch} />
                     </main>
                   </div>
@@ -308,7 +365,7 @@ function App() {
                     </div>
                     <main className="main-content" style={{ padding: 0 }}>
                       <div className="no-print">
-                        <TopHeader user={user} onLogout={handleLogout} />
+                        <TopHeader user={user} onLogout={handleLogout} onToggleSidebar={() => setIsSidebarOpen(prev => !prev)} />
                       </div>
                       <TraineeAssessmentForm token={token} user={user} selectedBranch={selectedBranch} />
                     </main>
@@ -349,14 +406,15 @@ function App() {
                     <div className="app-container">
                       <Sidebar user={user} onLogout={handleLogout} selectedBranch={selectedBranch} setSelectedBranch={setSelectedBranch} token={token} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
                       <main className="main-content">
-                        <TopHeader user={user} onLogout={handleLogout} />
+                        <TopHeader user={user} onLogout={handleLogout} onToggleSidebar={() => setIsSidebarOpen(prev => !prev)} />
                         <Routes>
-                          <Route path="/" element={<Dashboard token={token} selectedBranch={selectedBranch} />} />
-                          <Route path="/employees" element={<EmployeeMaster token={token} user={user} selectedBranch={selectedBranch} />} />
+                          <Route path="/" element={<Dashboard token={token} user={user} selectedBranch={selectedBranch} />} />
+                          <Route path="/employees" element={isDeptAdmin ? <Navigate to="/appraise" replace /> : <EmployeeMaster token={token} user={user} selectedBranch={selectedBranch} />} />
+                          <Route path="/locations" element={isDeptAdmin ? <Navigate to="/appraise" replace /> : <LocationMaster token={token} user={user} selectedBranch={selectedBranch} />} />
                           <Route path="/reports" element={<AppraisalReports token={token} user={user} selectedBranch={selectedBranch} />} />
-                          <Route path="/incentives" element={<IncentiveMaster token={token} user={user} selectedBranch={selectedBranch} />} />
-                          <Route path="/training" element={<TrainingMaster token={token} user={user} selectedBranch={selectedBranch} />} />
-                          <Route path="/trainee-assessment" element={<TraineeAssessmentForm token={token} user={user} selectedBranch={selectedBranch} />} />
+                          <Route path="/incentives" element={isDeptAdmin ? <Navigate to="/appraise" replace /> : <IncentiveMaster token={token} user={user} selectedBranch={selectedBranch} />} />
+                          <Route path="/training" element={isDeptAdmin ? <Navigate to="/appraise" replace /> : <TrainingMaster token={token} user={user} selectedBranch={selectedBranch} />} />
+                          <Route path="/trainee-assessment" element={isDeptAdmin ? <Navigate to="/appraise" replace /> : <TraineeAssessmentForm token={token} user={user} selectedBranch={selectedBranch} />} />
                           <Route path="*" element={<Navigate to="/" replace />} />
                         </Routes>
                       </main>

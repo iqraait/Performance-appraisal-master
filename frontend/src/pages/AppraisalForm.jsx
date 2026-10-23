@@ -34,7 +34,7 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
   };
 
   const isAdmin = user && (user.is_staff || user.is_superuser || user.role === 'department_admin' || user.role === 'superuser');
-  const initialCode = getQueryCode() || (user && !user.is_staff ? user.username : '');
+  const initialCode = getQueryCode() || (user && !isAdmin ? user.username : '');
 
   // Tabs state: 'form' or 'list'
   const [activeTab, setActiveTab] = useState(getQueryTab());
@@ -47,7 +47,10 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
   const [branch, setBranch] = useState(selectedBranch || '');
   const [designation, setDesignation] = useState('');
   const [dateOfJoining, setDateOfJoining] = useState('');
-  const [assignmentPeriod, setAssignmentPeriod] = useState('Annual');
+  const [assignmentPeriod, setAssignmentPeriod] = useState('');
+  const [incentivePeriods, setIncentivePeriods] = useState([]);
+  const activePeriodObj = incentivePeriods.find(p => p.is_active);
+  const activePeriodName = activePeriodObj ? activePeriodObj.name : '';
 
   // Performance Domains (0-20 each)
   const [scores, setScores] = useState({
@@ -77,11 +80,11 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
   // Validation errors
   const [validationErrors, setValidationErrors] = useState({});
 
-  // Department active staff and A/B stats
+  // Department active staff and score limit stats
   const [departmentStats, setDepartmentStats] = useState({
     activeStaff: 0,
-    existingAB: 0,
-    originalAppraisalRating: null
+    existingRestricted: 0,
+    originalAppraisalScore: null
   });
 
   // Editing state
@@ -118,13 +121,60 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
     setTimeout(() => setToast(null), 4000);
   };
 
+  // Load incentive periods
+  useEffect(() => {
+    const fetchPeriods = async () => {
+      try {
+        const res = await fetch(`http://${window.location.hostname}:8000/api/incentives/periods/`, {
+          headers: token ? { 'Authorization': `Token ${token}` } : {}
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setIncentivePeriods(data);
+          const active = data.find(p => p.is_active);
+          if (active) {
+            setAssignmentPeriod(prev => (!prev || prev === 'Annual' || prev === 'Monthly' || prev === 'Quarterly' || prev === 'Semi-Annual' ? active.name : prev));
+          }
+        }
+      } catch (err) {
+        console.error("Error loading incentive periods", err);
+      }
+    };
+    fetchPeriods();
+  }, [token]);
+
+  // Load department -> locations mapping from metadata
+  const [metaDepartments, setMetaDepartments] = useState([]);
+  const [metaLocations, setMetaLocations] = useState([]);
+  const [metaLocationsMap, setMetaLocationsMap] = useState({});
+  useEffect(() => {
+    const fetchMetaLocations = async () => {
+      try {
+        const res = await fetch(`http://${window.location.hostname}:8000/api/meta/departments-locations/`, {
+          headers: token ? { 'Authorization': `Token ${token}` } : {}
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.departments) setMetaDepartments(data.departments);
+          if (data.locations) setMetaLocations(data.locations);
+          if (data.department_locations) {
+            setMetaLocationsMap(data.department_locations);
+          }
+        }
+      } catch (e) {
+        console.error("Error loading location metadata", e);
+      }
+    };
+    fetchMetaLocations();
+  }, [token]);
+
   // Listen to tab/code query changes from Sidebar links or route queries
   useEffect(() => {
     const params = new URLSearchParams(routeLocation.search);
     const tab = params.get('tab') || 'form';
     setActiveTab(tab);
     
-    const code = params.get('code') || (user && !user.is_staff ? user.username : '');
+    const code = params.get('code') || (user && !isAdmin ? user.username : '');
     if (code) {
       setEmployeeCode(code);
       fetchEmployeeDetails(code);
@@ -144,29 +194,48 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
       }
     }
   }, [routeLocation.search, user, selectedBranch]);
+  
+
+  // Pre-select department for Department Admin if they have assigned departments
+  useEffect(() => {
+    if (user && user.role === 'department_admin' && Array.isArray(user.departments) && user.departments.length > 0 && !selectedDept) {
+      const defaultDept = user.departments[0];
+      setSelectedDept(defaultDept);
+      setDeptQuery(defaultDept);
+    }
+  }, [user, selectedDept]);
+
+  // Pre-select location for Department Admin if they have assigned locations
+  useEffect(() => {
+    if (user && user.role === 'department_admin' && Array.isArray(user.locations) && user.locations.length > 0 && !selectedLoc) {
+      const firstLoc = user.locations[0];
+      setSelectedLoc(firstLoc);
+      setLocQuery(firstLoc);
+    }
+  }, [user, selectedLoc]);
 
   // Load active employees list for the cascading dropdown selection flow
   useEffect(() => {
-    if (!initialCode && !employeeName) {
-      const loadAllEmployees = async () => {
-        setLoadingEmployees(true);
-        try {
-          const response = await fetch(`http://${window.location.hostname}:8000/api/employees/?status=Active&branch=${encodeURIComponent(selectedBranch || '')}`, {
-            headers: token ? { 'Authorization': `Token ${token}` } : {}
-          });
-          if (response.ok) {
-            const data = await response.json();
-            setAllEmployees(data);
-          }
-        } catch (err) {
-          console.error("Error loading active employees", err);
-        } finally {
-          setLoadingEmployees(false);
+    const loadAllEmployees = async () => {
+      setLoadingEmployees(true);
+      try {
+        const response = await fetch(`http://${window.location.hostname}:8000/api/employees/?status=Active&branch=${encodeURIComponent(selectedBranch || '')}`, {
+          headers: token ? { 'Authorization': `Token ${token}` } : {}
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setAllEmployees(data);
         }
-      };
+      } catch (err) {
+        console.error("Error loading active employees", err);
+      } finally {
+        setLoadingEmployees(false);
+      }
+    };
+    if (token) {
       loadAllEmployees();
     }
-  }, [initialCode, employeeName, token, selectedBranch]);
+  }, [token, selectedBranch]);
 
   const fetchEmployeeDetails = async (codeToFetch) => {
     const code = codeToFetch || employeeCode;
@@ -174,10 +243,14 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
       triggerToast('Please enter an employee code', 'error');
       return;
     }
+    if (user && user.role === 'department_admin' && String(code).trim().toLowerCase() === String(user.username).trim().toLowerCase()) {
+      triggerToast('Self-appraisal is not permitted. Your appraisal must be conducted by your supervisor.', 'error');
+      return;
+    }
     
     setFetching(true);
     try {
-      const response = await fetch(`http://${window.location.hostname}:8000/api/employees/fetch/?code=${code}&branch=${encodeURIComponent(selectedBranch || '')}`, {
+      const response = await fetch(`http://${window.location.hostname}:8000/api/employees/fetch/?code=${code}&branch=${encodeURIComponent(selectedBranch || '')}&department=${encodeURIComponent(selectedDept || '')}&location=${encodeURIComponent(selectedLoc || '')}`, {
         headers: token ? { 'Authorization': `Token ${token}` } : {}
       });
       const data = await response.json();
@@ -190,13 +263,17 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
         setBranch(data.branch || selectedBranch || '');
         setDesignation(data.designation || '');
         setDateOfJoining(data.date_of_joining || '');
-        setAssignmentPeriod(data.assignment_period || 'Annual');
+        const activeName = (incentivePeriods.find(p => p.is_active) || {}).name;
+        const validPeriod = (data.assignment_period && !['Annual', 'Monthly', 'Quarterly', 'Semi-Annual'].includes(data.assignment_period))
+          ? data.assignment_period
+          : (data.active_period_name || activeName || 'July -- Sep');
+        setAssignmentPeriod(validPeriod);
         
         const useLocCount = data.location && data.location_total_active > 0;
         setDepartmentStats({
           activeStaff: useLocCount ? data.location_total_active : (data.department_total_active || 0),
-          existingAB: useLocCount ? data.location_existing_ab : (data.department_existing_ab || 0),
-          originalAppraisalRating: null
+          existingRestricted: data.scope_existing_restricted !== undefined ? data.scope_existing_restricted : (useLocCount ? data.location_existing_ab : (data.department_existing_ab || 0)),
+          originalAppraisalScore: null
         });
         
         triggerToast('Employee details fetched successfully!');
@@ -213,7 +290,7 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
   };
 
   const fetchMySubmissions = async (codeToQuery) => {
-    const code = codeToQuery || employeeCode;
+    const code = (codeToQuery !== undefined && codeToQuery !== null) ? codeToQuery : employeeCode;
 
     setLoadingHistory(true);
     try {
@@ -237,7 +314,10 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
 
   const fetchExistingAppraisal = async (codeToQuery, periodToQuery) => {
     const code = codeToQuery || employeeCode;
-    const period = periodToQuery || assignmentPeriod;
+    const activeName = (incentivePeriods.find(p => p.is_active) || {}).name;
+    const period = (periodToQuery && !['Annual', 'Monthly', 'Quarterly', 'Semi-Annual'].includes(periodToQuery))
+      ? periodToQuery
+      : (activeName || assignmentPeriod);
     if (!code) return;
 
     try {
@@ -247,9 +327,13 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
       });
       if (response.ok) {
         const data = await response.json();
-        const existing = data.find(sub => sub.assignment_period === period);
+        const existing = data.find(sub => 
+          sub.assignment_period === period || 
+          (activeName && sub.assignment_period === activeName)
+        ) || (data.length > 0 ? data[0] : null);
         if (existing) {
           setEditingAppraisalId(existing.id);
+          setAssignmentPeriod(existing.assignment_period || activeName || 'July -- Sep');
           setScores({
             job_competence: existing.job_competence,
             productivity_responsibility: existing.productivity_responsibility,
@@ -286,9 +370,9 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
             protocol_violation: 0,
             written_warning: 0
           });
-          setLocationStats(prev => ({
+          setDepartmentStats(prev => ({
             ...prev,
-            originalAppraisalRating: null
+            originalAppraisalScore: null
           }));
         }
       }
@@ -366,20 +450,50 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
       isValid = false;
     }
 
-    // Check department-wise A/B grade limit
-    const ratingVal = getRatingText(performanceTotal - totalDeduction);
-    const isCurrentRatingAB = ratingVal.includes('(A)') || ratingVal.includes('(B)');
+    // Check department-wise score limits
+    const currentMarks = Math.max(0, performanceTotal - totalDeduction);
+    const currentScore = Number(((currentMarks * 3.0) / 100.0).toFixed(2));
     const isManagerPool = (department && (department.trim().toLowerCase().includes('manager pool') || department.trim().toLowerCase().includes('manger pool'))) ||
                           (location && (location.trim().toLowerCase().includes('manager pool') || location.trim().toLowerCase().includes('manger pool')));
-    if (isCurrentRatingAB && departmentStats.activeStaff > 0 && !isManagerPool) {
-      const originalIsAB = departmentStats.originalAppraisalRating && 
-        (departmentStats.originalAppraisalRating.includes('(A)') || departmentStats.originalAppraisalRating.includes('(B)'));
-      const adjustedExistingAB = originalIsAB ? departmentStats.existingAB - 1 : departmentStats.existingAB;
-      const maxAllowedAB = Math.max(1, Math.ceil(departmentStats.activeStaff * 0.5));
-      
-      if (adjustedExistingAB >= maxAllowedAB) {
-        errors.ratingLimit = `Grade Limit Exceeded: Only ${maxAllowedAB} out of ${departmentStats.activeStaff} active staff in ${location ? `location '${location}'` : `department '${department}'`} can receive Grade A or B. Already assigned: ${adjustedExistingAB}. Please assign another grade.`;
-        isValid = false;
+    
+    if (departmentStats.activeStaff > 0 && !isManagerPool) {
+      const activeCount = departmentStats.activeStaff;
+      let thresholdScore = 2.25;
+      let thresholdMarks = 75;
+      let thresholdLabel = '2.25 - 3.0 (75% - 100%)';
+      let maxAllowed = 10;
+      let ruleDesc = '';
+
+      if (activeCount <= 10) {
+        thresholdScore = 2.70;
+        thresholdMarks = 90;
+        thresholdLabel = '2.7 - 3.0 (90% - 100%)';
+        maxAllowed = Math.min(5, Math.ceil(activeCount * 0.5));
+        ruleDesc = `teams with ≤ 10 staff (Max allowed: ${maxAllowed} out of ${activeCount} active staff for scores 2.70–3.00; remaining must be < 2.70 / < 90%)`;
+      } else if (activeCount >= 20) {
+        thresholdScore = 2.25;
+        thresholdMarks = 75;
+        thresholdLabel = '2.25 - 3.0 (75% - 100%)';
+        maxAllowed = Math.min(10, activeCount);
+        ruleDesc = `teams with ≥ 20 staff (Max allowed: ${maxAllowed} out of ${activeCount} active staff for scores 2.25–3.00)`;
+      } else {
+        thresholdScore = 2.25;
+        thresholdMarks = 75;
+        thresholdLabel = '2.25 - 3.0 (75% - 100%)';
+        maxAllowed = Math.max(1, Math.ceil(activeCount * 0.5));
+        ruleDesc = `teams with 11–19 staff (Max allowed 50%: ${maxAllowed} out of ${activeCount} active staff for scores 2.25–3.00)`;
+      }
+
+      const isCurrentRestricted = currentScore >= thresholdScore || currentMarks >= thresholdMarks;
+
+      if (isCurrentRestricted) {
+        const originalWasRestricted = departmentStats.originalAppraisalScore && departmentStats.originalAppraisalScore >= thresholdScore;
+        const adjustedExisting = originalWasRestricted ? (departmentStats.existingRestricted || 0) - 1 : (departmentStats.existingRestricted || 0);
+
+        if (adjustedExisting >= maxAllowed) {
+          errors.ratingLimit = `Score Limit Exceeded: Only ${maxAllowed} out of ${activeCount} active staff in ${location ? `location '${location}'` : `department '${department}'`} can receive ${thresholdLabel}. Already assigned: ${adjustedExisting}. Please assign a score less than ${thresholdScore} (< ${thresholdMarks}%).`;
+          isValid = false;
+        }
       }
     }
 
@@ -394,6 +508,11 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
     if (!isValid) {
       const errMsg = errors.ratingLimit || 'Please correct validation errors on the form.';
       triggerToast(errMsg, 'error');
+      return;
+    }
+
+    if (user && user.role === 'department_admin' && String(employeeCode).trim().toLowerCase() === String(user.username).trim().toLowerCase()) {
+      triggerToast('Self-appraisal is not permitted. You cannot submit an appraisal for yourself.', 'error');
       return;
     }
 
@@ -520,8 +639,8 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
         const useLocCount = data.location && data.location_total_active > 0;
         setDepartmentStats({
           activeStaff: useLocCount ? data.location_total_active : (data.department_total_active || 0),
-          existingAB: useLocCount ? data.location_existing_ab : (data.department_existing_ab || 0),
-          originalAppraisalRating: appraisal.rating
+          existingRestricted: data.scope_existing_restricted !== undefined ? data.scope_existing_restricted : (useLocCount ? data.location_existing_ab : (data.department_existing_ab || 0)),
+          originalAppraisalScore: appraisal.final_score
         });
       }
     } catch (err) {
@@ -555,6 +674,12 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
   };
 
   const handlePrintSub = (appraisal) => {
+    const activePeriodObj = incentivePeriods.find(p => p.is_active);
+    const activePeriodName = activePeriodObj ? activePeriodObj.name : '';
+    const printPeriod = (appraisal.assignment_period && !['Annual', 'Monthly', 'Quarterly', 'Semi-Annual'].includes(appraisal.assignment_period))
+      ? appraisal.assignment_period
+      : (activePeriodName || appraisal.assignment_period || 'July -- Sep');
+
     const printWindow = window.open('', '_blank');
     const htmlContent = `
       <html>
@@ -585,7 +710,7 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
             <div class="grid-cell"><strong>Location:</strong> ${appraisal.location || ''}</div>
             <div class="grid-cell"><strong>Designation:</strong> ${appraisal.designation}</div>
             <div class="grid-cell"><strong>Date of Joining:</strong> ${appraisal.date_of_joining}</div>
-            <div class="grid-cell"><strong>Assessment Period:</strong> ${appraisal.assignment_period}</div>
+            <div class="grid-cell"><strong>Incentive Period:</strong> ${printPeriod}</div>
           </div>
           <h3>Performance Domains</h3>
           <table>
@@ -638,20 +763,68 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
   const textMedium = 'var(--text-muted)';
 
   // Filter lists for cascading dropdown selectors
-  const departmentsList = [...new Set(allEmployees.map(e => e.department))].filter(Boolean).sort();
+  const isDeptAdmin = Boolean(user && user.role === 'department_admin');
+  const adminDepts = (isDeptAdmin && Array.isArray(user.departments))
+    ? user.departments
+    : [];
+  const empDepts = [...new Set(allEmployees.flatMap(e => (e.department || '').split(',').map(s => s.trim())))].filter(Boolean);
+  const departmentsList = isDeptAdmin
+    ? [...new Set(adminDepts)].sort()
+    : [...new Set([...adminDepts, ...empDepts])].sort();
   const filteredDepartmentsList = departmentsList.filter(d => 
     d.toLowerCase().includes(deptQuery.toLowerCase())
   );
 
-  const locationsList = selectedDept
-    ? [...new Set(allEmployees.filter(e => e.department === selectedDept).map(e => e.location))].filter(Boolean).sort()
+  const adminLocs = (isDeptAdmin && Array.isArray(user.locations))
+    ? user.locations
     : [];
+  const empLocs = selectedDept
+    ? [...new Set(
+        allEmployees
+          .filter(e => (e.department || '').split(',').map(s => s.trim().toLowerCase()).includes(selectedDept.trim().toLowerCase()))
+          .flatMap(e => (e.location || '').split(',').map(s => s.trim()))
+      )].filter(Boolean)
+    : [];
+  const metaDeptLocs = (metaLocationsMap && selectedDept && metaLocationsMap[selectedDept]) || [];
+  
+  // For department admin logins, strictly only show the locations tagged in their admin login.
+  // If no locations are tagged, show [] (empty) so untagged admins see nothing.
+  const locationsList = isDeptAdmin
+    ? [...new Set(adminLocs)].sort()
+    : [...new Set([...empLocs, ...metaDeptLocs, ...adminLocs])].sort();
+
   const filteredLocationsList = locationsList.filter(l => 
     l.toLowerCase().includes(locQuery.toLowerCase())
   );
 
-  const filteredEmployeesList = (selectedDept && selectedLoc)
-    ? allEmployees.filter(e => e.department === selectedDept && e.location === selectedLoc).sort((a, b) => String(a.employee_code).localeCompare(String(b.employee_code)))
+  const adminBranches = (isDeptAdmin && Array.isArray(user.branches))
+    ? user.branches
+    : [];
+  const hasBranchAccess = !isDeptAdmin || (adminBranches.length > 0 && (!selectedBranch || adminBranches.includes(selectedBranch)));
+
+  const loggedInCode = (user && user.username) ? String(user.username).trim().toLowerCase() : '';
+  const normalizeLoc = (str) => (str || '').replace(/^na[\\/]/i, '').replace(/[\s\-_/]/g, '').trim().toLowerCase();
+
+  const filteredEmployeesList = (selectedDept && hasBranchAccess)
+    ? allEmployees
+        .filter(e => {
+          const depts = (e.department || '').split(',').map(s => s.trim().toLowerCase());
+          if (!depts.includes(selectedDept.trim().toLowerCase())) return false;
+          
+          if (selectedLoc) {
+            const selClean = normalizeLoc(selectedLoc);
+            const locs = (e.location || '').split(',').map(s => s.trim());
+            return locs.some(l => {
+              const lClean = normalizeLoc(l);
+              return l.toLowerCase() === selectedLoc.toLowerCase() || 
+                     lClean === selClean ||
+                     (lClean && selClean && (lClean.includes(selClean) || selClean.includes(lClean)));
+            });
+          }
+          return true;
+        })
+        .filter(e => !loggedInCode || String(e.employee_code).trim().toLowerCase() !== loggedInCode)
+        .sort((a, b) => String(a.employee_code).localeCompare(String(b.employee_code)))
     : [];
   const finalEmployeesList = filteredEmployeesList.filter(emp => {
     const code = String(emp.employee_code).toLowerCase();
@@ -661,17 +834,41 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
   });
 
   const ratingText = getRatingText(finalScore);
-  const isCurrentRatingAB = ratingText.includes('(A)') || ratingText.includes('(B)');
-  
-  const originalIsAB = departmentStats.originalAppraisalRating && 
-    (departmentStats.originalAppraisalRating.includes('(A)') || departmentStats.originalAppraisalRating.includes('(B)'));
-  
-  const adjustedExistingAB = originalIsAB ? departmentStats.existingAB - 1 : departmentStats.existingAB;
-  const maxAllowedAB = Math.max(1, Math.ceil(departmentStats.activeStaff * 0.5));
-  
+
   const isManagerPool = (department && (department.trim().toLowerCase().includes('manager pool') || department.trim().toLowerCase().includes('manger pool'))) ||
                         (location && (location.trim().toLowerCase().includes('manager pool') || location.trim().toLowerCase().includes('manger pool')));
-  const isLimitExceeded = isCurrentRatingAB && (departmentStats.activeStaff > 0) && (adjustedExistingAB >= maxAllowedAB) && !isManagerPool;
+
+  const activeCount = departmentStats.activeStaff || 0;
+  let thresholdScore = 2.25;
+  let thresholdMarks = 75;
+  let thresholdLabel = '2.25 - 3.0 (75% - 100%)';
+  let maxAllowed = 10;
+  let ruleDesc = '';
+
+  if (activeCount <= 10) {
+    thresholdScore = 2.70;
+    thresholdMarks = 90;
+    thresholdLabel = '2.7 - 3.0 (90% - 100%)';
+    maxAllowed = Math.min(5, Math.ceil(activeCount * 0.5));
+    ruleDesc = `Staff ≤ 10: Max ${maxAllowed} of ${activeCount} staff can receive 2.70–3.00 (others < 2.70)`;
+  } else if (activeCount >= 20) {
+    thresholdScore = 2.25;
+    thresholdMarks = 75;
+    thresholdLabel = '2.25 - 3.0 (75% - 100%)';
+    maxAllowed = Math.min(10, activeCount);
+    ruleDesc = 'Staff ≥ 20: Max 10 staff can receive 2.25–3.00';
+  } else {
+    thresholdScore = 2.25;
+    thresholdMarks = 75;
+    thresholdLabel = '2.25 - 3.0 (75% - 100%)';
+    maxAllowed = Math.max(1, Math.ceil(activeCount * 0.5));
+    ruleDesc = 'Staff 11–19: Max 50% can receive 2.25–3.00';
+  }
+
+  const isCurrentRestricted = finalScore >= thresholdScore || marksObtained >= thresholdMarks;
+  const originalWasRestricted = departmentStats.originalAppraisalScore && departmentStats.originalAppraisalScore >= thresholdScore;
+  const adjustedExisting = originalWasRestricted ? (departmentStats.existingRestricted || 0) - 1 : (departmentStats.existingRestricted || 0);
+  const isLimitExceeded = isCurrentRestricted && (activeCount > 0) && (adjustedExisting >= maxAllowed) && !isManagerPool;
 
   return (
     <div style={{ maxWidth: '1020px', margin: '0 auto', fontFamily: '"Inter", sans-serif', paddingBottom: '40px', transition: 'all 0.3s ease' }}>
@@ -824,7 +1021,9 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                           </div>
                         ))
                       ) : (
-                        <div style={{ padding: '10px 12px', fontSize: '13px', color: textMedium, textAlign: 'left' }}>No departments found</div>
+                        <div style={{ padding: '10px 12px', fontSize: '13px', color: textMedium, textAlign: 'left' }}>
+                          {isDeptAdmin && adminDepts.length === 0 ? 'No departments assigned to your account' : 'No departments found'}
+                        </div>
                       )}
                     </div>
                   )}
@@ -836,7 +1035,13 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                     <input
                       type="text"
                       className="form-control"
-                      placeholder={selectedDept ? "Type or select location..." : "Select department first"}
+                      placeholder={
+                        isDeptAdmin && adminLocs.length === 0
+                          ? "No locations assigned to your account"
+                          : selectedDept
+                            ? "Type or select location..."
+                            : "Select department first"
+                      }
                       value={locQuery}
                       onChange={(e) => {
                         setLocQuery(e.target.value);
@@ -849,8 +1054,8 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                           setShowLocDropdown(false);
                         }, 200);
                       }}
-                      disabled={!selectedDept}
-                      style={{ fontSize: '13px', padding: '8px 36px 8px 12px', color: '#000000', backgroundColor: selectedDept ? '#ffffff' : '#f1f5f9', borderColor: borderLight }}
+                      disabled={!selectedDept || (isDeptAdmin && adminLocs.length === 0)}
+                      style={{ fontSize: '13px', padding: '8px 36px 8px 12px', color: '#000000', backgroundColor: selectedDept && (!isDeptAdmin || adminLocs.length > 0) ? '#ffffff' : '#f1f5f9', borderColor: borderLight }}
                     />
                     <ChevronDown size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: textMedium, pointerEvents: 'none' }} />
                   </div>
@@ -894,7 +1099,9 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                           </div>
                         ))
                       ) : (
-                        <div style={{ padding: '10px 12px', fontSize: '13px', color: textMedium, textAlign: 'left' }}>No locations found</div>
+                        <div style={{ padding: '10px 12px', fontSize: '13px', color: textMedium, textAlign: 'left' }}>
+                          {isDeptAdmin && adminLocs.length === 0 ? 'No locations assigned to your account' : 'No locations found'}
+                        </div>
                       )}
                     </div>
                   )}
@@ -906,13 +1113,13 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                     <input
                       type="text"
                       className="form-control"
-                      placeholder={selectedLoc ? "Type to search by code or name..." : "Select location first"}
+                      placeholder={selectedDept ? "Type to search by code or name..." : "Select department first"}
                       value={empQuery}
                       onChange={(e) => {
                         setEmpQuery(e.target.value);
                         setShowEmpDropdown(true);
                       }}
-                      onFocus={() => { if (selectedLoc) setShowEmpDropdown(true); }}
+                      onFocus={() => { if (selectedDept) setShowEmpDropdown(true); }}
                       onBlur={() => {
                         setTimeout(() => {
                           const chosenEmp = filteredEmployeesList.find(e => e.employee_code === selectedEmpCode);
@@ -920,12 +1127,12 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                           setShowEmpDropdown(false);
                         }, 200);
                       }}
-                      disabled={!selectedLoc}
-                      style={{ fontSize: '13px', padding: '8px 36px 8px 12px', color: '#000000', backgroundColor: selectedLoc ? '#ffffff' : '#f1f5f9', borderColor: borderLight }}
+                      disabled={!selectedDept}
+                      style={{ fontSize: '13px', padding: '8px 36px 8px 12px', color: '#000000', backgroundColor: selectedDept ? '#ffffff' : '#f1f5f9', borderColor: borderLight }}
                     />
                     <ChevronDown size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: textMedium, pointerEvents: 'none' }} />
                   </div>
-                  {showEmpDropdown && selectedLoc && (
+                  {showEmpDropdown && selectedDept && (
                     <div style={{
                       position: 'absolute',
                       top: '100%',
@@ -1082,12 +1289,18 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                           <input
                             type="text"
                             id="form_dept"
+                            list="appraisal-dept-datalist"
                             className="form-control"
                             value={department}
                             onChange={(e) => setDepartment(e.target.value)}
                             required
                             style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
                           />
+                          <datalist id="appraisal-dept-datalist">
+                            {metaDepartments.map(d => (
+                              <option key={d} value={d} />
+                            ))}
+                          </datalist>
                         </div>
 
                         <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1095,12 +1308,18 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                           <input
                             type="text"
                             id="form_loc"
+                            list="appraisal-loc-datalist"
                             className="form-control"
                             value={location}
                             onChange={(e) => setLocation(e.target.value)}
                             required
                             style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
                           />
+                          <datalist id="appraisal-loc-datalist">
+                            {(department && metaLocationsMap[department] ? metaLocationsMap[department] : metaLocations).map(l => (
+                              <option key={l} value={l} />
+                            ))}
+                          </datalist>
                         </div>
                       </div>
 
@@ -1134,18 +1353,27 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
 
                       <div className="grid-cols-2" style={{ gap: '12px' }}>
                         <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label htmlFor="form_period" className="form-label" style={{ color: textMedium, fontSize: '12px', fontWeight: '600' }}>Assessment Period</label>
+                          <label htmlFor="form_period" className="form-label" style={{ color: textMedium, fontSize: '12px', fontWeight: '600' }}>Incentive Period</label>
                           <select 
                             id="form_period"
                             className="form-control" 
-                            value={assignmentPeriod} 
+                            value={assignmentPeriod || activePeriodName || 'July -- Sep'} 
                             onChange={(e) => setAssignmentPeriod(e.target.value)}
                             style={{ fontSize: '13px', padding: '6px 10px', color: '#000000', backgroundColor: '#ffffff', borderColor: borderLight }}
                           >
-                            <option value="Annual">Annual</option>
-                            <option value="Semi-Annual">Semi-Annual</option>
-                            <option value="Quarterly">Quarterly</option>
-                            <option value="Monthly">Monthly</option>
+                            {incentivePeriods.length > 0 ? (
+                              incentivePeriods.map(p => (
+                                <option key={p.id} value={p.name}>{p.name}{p.is_active ? ' (Active)' : ''}</option>
+                              ))
+                            ) : (
+                              <>
+                                {activePeriodName && <option value={activePeriodName}>{activePeriodName} (Active)</option>}
+                                <option value="July -- Sep">July -- Sep (Active)</option>
+                              </>
+                            )}
+                            {assignmentPeriod && !incentivePeriods.some(p => p.name === assignmentPeriod) && (
+                              <option value={assignmentPeriod}>{assignmentPeriod}</option>
+                            )}
                           </select>
                         </div>
                         <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1195,26 +1423,26 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                           <span style={{ fontSize: '28px', fontWeight: '800', color: primaryBlue, fontFamily: 'Outfit' }}>{finalScoreFormatted}</span>
                         </div>
 
-                        {departmentStats.activeStaff > 0 && (
+                        {activeCount > 0 && (
                           <div style={{ borderTop: `1px dashed ${borderLight}`, paddingTop: '12px', marginTop: '12px', fontSize: '12px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', color: textMedium, marginBottom: '4px' }}>
                               <span>{location ? 'Loc Active Staff:' : 'Dept Active Staff:'}</span>
-                              <strong style={{ color: textDark }}>{departmentStats.activeStaff}</strong>
+                              <strong style={{ color: textDark }}>{activeCount}</strong>
                             </div>
                             {!isManagerPool ? (
                               <>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', color: textMedium, marginBottom: '4px' }}>
-                                  <span>{location ? 'Loc Grade A/B Limit:' : 'Dept Grade A/B Limit:'}</span>
-                                  <strong style={{ color: textDark }}>{maxAllowedAB}</strong>
+                                  <span>{thresholdLabel} Limit:</span>
+                                  <strong style={{ color: textDark }}>{maxAllowed}</strong>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', color: textMedium }}>
-                                  <span>{location ? 'Loc Existing A/B:' : 'Dept Existing A/B:'}</span>
-                                  <strong style={{ color: textDark }}>{adjustedExistingAB}</strong>
+                                  <span>Assigned ({thresholdLabel}):</span>
+                                  <strong style={{ color: textDark }}>{adjustedExisting}</strong>
                                 </div>
                               </>
                             ) : (
                               <div style={{ display: 'flex', justifyContent: 'space-between', color: textMedium }}>
-                                <span>{location ? 'Loc Grade A/B Limit:' : 'Dept Grade A/B Limit:'}</span>
+                                <span>Score Limit:</span>
                                 <strong style={{ color: '#16a34a' }}>No Limit (Manager Pool)</strong>
                               </div>
                             )}
@@ -1256,8 +1484,8 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                           >
                             <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '1px', color: '#dc2626' }} />
                             <div>
-                              <strong style={{ display: 'block', marginBottom: '2px' }}>Grade Limit Exceeded</strong>
-                              Only 50% of staff in {location ? 'location' : 'department'} <strong>{location || department}</strong> can receive Grade A or B (Max allowed: <strong>{maxAllowedAB}</strong> out of <strong>{departmentStats.activeStaff}</strong> active staff). Already assigned: <strong>{adjustedExistingAB}</strong>. Please assign to another grade.
+                              <strong style={{ display: 'block', marginBottom: '2px' }}>Score Limit Exceeded</strong>
+                              Under the rule ({ruleDesc}), in {location ? 'location' : 'department'} <strong>{location || department}</strong> only <strong>{maxAllowed}</strong> staff can receive scores in {thresholdLabel}. Already assigned: <strong>{adjustedExisting}</strong>. Please assign a score less than {thresholdScore} (&lt; {thresholdMarks}%).
                             </div>
                           </div>
                         )}
@@ -1517,7 +1745,7 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                       gap: '16px'
                     }}
                   >
-                    {/* Score Scale Legend */}
+                    {/* Score Scale Legend
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', fontSize: '11px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <span className="rating-badge rating-a" style={{ fontSize: '10px', padding: '2px 5px', color: '#1e3a8a', backgroundColor: '#dbeafe', borderColor: '#93c5fd' }}>A</span>
@@ -1539,7 +1767,7 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
                         <span className="rating-badge rating-e" style={{ fontSize: '10px', padding: '2px 5px', color: '#991b1b', backgroundColor: '#fee2e2', borderColor: '#fca5a5' }}>E</span>
                         <span style={{ color: textMedium }}>&lt;50 Unsat.</span>
                       </div>
-                    </div>
+                    </div> */}
 
                     <div style={{ display: 'flex', gap: '12px' }}>
                       {editingAppraisalId && (

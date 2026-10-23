@@ -131,13 +131,11 @@ def send_meta_whatsapp_message(to_number, template_name=None, parameters=None, f
 
 def send_trainee_assessment_reminder(trainee, custom_base_url=None):
     """
-    Sends WhatsApp alert for a specific trainee to their Department Admin(s).
+    NOTE: WhatsApp notifications are TEMPORARILY BLOCKED per policy.
+    Redirecting to Email notification service for Department Head & Candidate.
     """
-    if isinstance(trainee, int):
-        try:
-            trainee = TrainingEmployee.objects.get(id=trainee)
-        except TrainingEmployee.DoesNotExist:
-            return False, f"Training employee record with ID {trainee} does not exist."
+    from .email_service import send_trainee_assessment_email
+    return send_trainee_assessment_email(trainee, is_reminder_3day=False, custom_base_url=custom_base_url)
 
     config = get_whatsapp_config()
     base_url = custom_base_url or config.base_url or "http://172.16.21.161:5173"
@@ -249,52 +247,9 @@ def send_trainee_assessment_reminder(trainee, custom_base_url=None):
 
 def check_and_send_all_due_reminders():
     """
-    Checks all active trainees whose training end date is within 7 days from today
-    and whose WhatsApp notification has not been sent yet.
-    Sends notifications automatically and returns summary.
+    NOTE: WhatsApp notifications are TEMPORARILY BLOCKED per policy.
+    Redirecting to Email notification service.
     """
-    today = timezone.now().date()
-    # Filter trainees in 'Training' or 'Assessment Due' status who haven't received reminder
-    trainees = TrainingEmployee.objects.filter(
-        whatsapp_notification_sent=False,
-        status__in=['Training', 'Assessment Due']
-    )
+    from .email_service import check_and_send_all_due_email_reminders
+    return check_and_send_all_due_email_reminders()
 
-    eligible_trainees = []
-    for t in trainees:
-        if t.training_end_date:
-            alert_target_date = t.training_end_date - datetime.timedelta(days=7)
-            # If today is on or after the 7-day alert date, notification is due
-            if today >= alert_target_date:
-                eligible_trainees.append(t)
-
-    total_eligible = len(eligible_trainees)
-    sent_count = 0
-    failed_count = 0
-    results_detail = []
-
-    for trainee in eligible_trainees:
-        success, message = send_trainee_assessment_reminder(trainee)
-        if success:
-            sent_count += 1
-            results_detail.append({
-                "code": trainee.employee_code,
-                "name": trainee.name,
-                "status": "Sent",
-                "message": message
-            })
-        else:
-            failed_count += 1
-            results_detail.append({
-                "code": trainee.employee_code,
-                "name": trainee.name,
-                "status": "Failed",
-                "message": message
-            })
-
-    return {
-        "total_eligible": total_eligible,
-        "sent_count": sent_count,
-        "failed_count": failed_count,
-        "results": results_detail
-    }
