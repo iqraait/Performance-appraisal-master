@@ -252,9 +252,7 @@ class AppraisalSerializer(serializers.ModelSerializer):
 
             # Rule determination:
             # 1. Staff <= 10: strictly max min(5, ceil(N/2)) staff for score 2.70 - 3.00 (90% - 100%), others < 2.70
-            #    e.g. 5 staff -> max 3 staff (other 2 must receive < 90% / < 2.70); 10 staff -> max 5 staff
-            # 2. Staff >= 20: strictly max 10 staff for score 2.25 - 3.00 (75% - 100%), others < 2.25
-            # 3. 11 to 19 staff: max 50% for score 2.25 - 3.00 (75% - 100%), others < 2.25
+            # 2. Staff > 10: max 50% (half) of active staff for score 2.25 - 3.00 (75% - 100%), others < 2.25
             if total_active_staff <= 10:
                 threshold_score = 2.70
                 threshold_marks = 90
@@ -264,21 +262,12 @@ class AppraisalSerializer(serializers.ModelSerializer):
                 app_qs_restricted = app_qs.filter(
                     Q(final_score__gte=2.70) | Q(marks_obtained__gte=90) | Q(rating__icontains='Outstanding')
                 )
-            elif total_active_staff >= 20:
-                threshold_score = 2.25
-                threshold_marks = 75
-                threshold_label = "2.25 - 3.0 (75% - 100%)"
-                max_allowed = min(10, total_active_staff) if total_active_staff > 0 else 10
-                rule_desc = f"teams with ≥ 20 staff (Max allowed: {max_allowed} out of {total_active_staff} active staff for scores 2.25–3.00; remaining must be < 2.25 / < 75%)"
-                app_qs_restricted = app_qs.filter(
-                    Q(final_score__gte=2.25) | Q(marks_obtained__gte=75) | Q(rating__icontains='Outstanding') | Q(rating__icontains='Very Good')
-                )
             else:
                 threshold_score = 2.25
                 threshold_marks = 75
                 threshold_label = "2.25 - 3.0 (75% - 100%)"
                 max_allowed = max(1, (total_active_staff + 1) // 2)
-                rule_desc = f"teams with 11–19 staff (Max allowed 50%: {max_allowed} out of {total_active_staff} active staff for scores 2.25–3.00; remaining must be < 2.25 / < 75%)"
+                rule_desc = f"teams with > 10 staff (Max allowed 50%: {max_allowed} out of {total_active_staff} active staff for scores 2.25–3.00; remaining must be < 2.25 / < 75%)"
                 app_qs_restricted = app_qs.filter(
                     Q(final_score__gte=2.25) | Q(marks_obtained__gte=75) | Q(rating__icontains='Outstanding') | Q(rating__icontains='Very Good')
                 )

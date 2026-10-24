@@ -514,18 +514,12 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
         thresholdLabel = '2.7 - 3.0 (90% - 100%)';
         maxAllowed = Math.min(5, Math.ceil(activeCount * 0.5));
         ruleDesc = `teams with ≤ 10 staff (Max allowed: ${maxAllowed} out of ${activeCount} active staff for scores 2.70–3.00; remaining must be < 2.70 / < 90%)`;
-      } else if (activeCount >= 20) {
-        thresholdScore = 2.25;
-        thresholdMarks = 75;
-        thresholdLabel = '2.25 - 3.0 (75% - 100%)';
-        maxAllowed = Math.min(10, activeCount);
-        ruleDesc = `teams with ≥ 20 staff (Max allowed: ${maxAllowed} out of ${activeCount} active staff for scores 2.25–3.00)`;
       } else {
         thresholdScore = 2.25;
         thresholdMarks = 75;
         thresholdLabel = '2.25 - 3.0 (75% - 100%)';
         maxAllowed = Math.max(1, Math.ceil(activeCount * 0.5));
-        ruleDesc = `teams with 11–19 staff (Max allowed 50%: ${maxAllowed} out of ${activeCount} active staff for scores 2.25–3.00)`;
+        ruleDesc = `teams with > 10 staff (Max allowed 50%: ${maxAllowed} out of ${activeCount} active staff for scores 2.25–3.00; remaining must be < 2.25 / < 75%)`;
       }
 
       const isCurrentRestricted = currentScore >= thresholdScore || currentMarks >= thresholdMarks;
@@ -895,18 +889,12 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
     thresholdLabel = '2.7 - 3.0 (90% - 100%)';
     maxAllowed = Math.min(5, Math.ceil(activeCount * 0.5));
     ruleDesc = `Staff ≤ 10: Max ${maxAllowed} of ${activeCount} staff can receive 2.70–3.00 (others < 2.70)`;
-  } else if (activeCount >= 20) {
-    thresholdScore = 2.25;
-    thresholdMarks = 75;
-    thresholdLabel = '2.25 - 3.0 (75% - 100%)';
-    maxAllowed = Math.min(10, activeCount);
-    ruleDesc = 'Staff ≥ 20: Max 10 staff can receive 2.25–3.00';
   } else {
     thresholdScore = 2.25;
     thresholdMarks = 75;
     thresholdLabel = '2.25 - 3.0 (75% - 100%)';
     maxAllowed = Math.max(1, Math.ceil(activeCount * 0.5));
-    ruleDesc = 'Staff 11–19: Max 50% can receive 2.25–3.00';
+    ruleDesc = `Staff > 10: Max 50% (${maxAllowed} of ${activeCount} staff) can receive 2.25–3.00 (≥ 75%)`;
   }
 
   const isCurrentRestricted = finalScore >= thresholdScore || marksObtained >= thresholdMarks;

@@ -874,23 +874,15 @@ class EmployeeAutoFetchView(APIView):
 
             # Rule calculation:
             # 1. Staff <= 10: strictly max min(5, ceil(N/2)) staff for score 2.70 - 3.00 (90% - 100%), others < 2.70
-            #    e.g. 5 staff -> max 3 staff; 10 staff -> max 5 staff
-            # 2. Staff >= 20: strictly max 10 staff for score 2.25 - 3.00 (75% - 100%), others < 2.25
-            # 3. 11 to 19 staff: max 50% for score 2.25 - 3.00 (75% - 100%), others < 2.25
+            # 2. Staff > 10: max 50% (half) of active staff for score 2.25 - 3.00 (75% - 100%), others < 2.25
             if scope_staff <= 10:
                 rule_type = 'lte_10'
                 threshold_score = 2.70
                 threshold_marks = 90
                 max_allowed = min(5, (scope_staff + 1) // 2) if scope_staff > 0 else 1
                 threshold_label = '2.7 - 3.0 (90% - 100%)'
-            elif scope_staff >= 20:
-                rule_type = 'gte_20'
-                threshold_score = 2.25
-                threshold_marks = 75
-                max_allowed = min(10, scope_staff) if scope_staff > 0 else 10
-                threshold_label = '2.25 - 3.0 (75% - 100%)'
             else:
-                rule_type = '11_to_19'
+                rule_type = 'gt_10'
                 threshold_score = 2.25
                 threshold_marks = 75
                 max_allowed = max(1, (scope_staff + 1) // 2)
