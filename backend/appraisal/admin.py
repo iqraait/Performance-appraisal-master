@@ -273,9 +273,9 @@ class AppraisalAdmin(admin.ModelAdmin):
 
 @admin.register(IncentivePeriod)
 class IncentivePeriodAdmin(admin.ModelAdmin):
-    list_display = ('name', 'months', 'cutoff_date', 'active_badge', 'created_at')
-    list_filter = ('is_active',)
-    search_fields = ('name', 'months')
+    list_display = ('name', 'branch', 'months', 'cutoff_date', 'active_badge', 'created_at')
+    list_filter = ('branch', 'is_active')
+    search_fields = ('name', 'months', 'branch__name')
     list_per_page = 25
 
     def active_badge(self, obj):
@@ -288,23 +288,27 @@ class IncentivePeriodAdmin(admin.ModelAdmin):
 
 @admin.register(DivisionRate)
 class DivisionRateAdmin(admin.ModelAdmin):
-    list_display = ('division_name', 'rate', 'updated_at')
-    search_fields = ('division_name',)
+    list_display = ('division_name', 'branch', 'rate', 'updated_at')
+    list_filter = ('branch',)
+    search_fields = ('division_name', 'branch__name')
     list_editable = ('rate',)
     list_per_page = 25
 
 
 @admin.register(EmployeeLevelConfig)
 class EmployeeLevelConfigAdmin(admin.ModelAdmin):
-    list_display = ('level_code', 'description', 'score', 'updated_at')
-    search_fields = ('level_code', 'description')
+    list_display = ('level_code', 'branch', 'description', 'score', 'updated_at')
+    list_filter = ('branch',)
+    search_fields = ('level_code', 'description', 'branch__name')
     list_editable = ('score',)
     list_per_page = 25
 
 
 @admin.register(ExperienceLevelConfig)
 class ExperienceLevelConfigAdmin(admin.ModelAdmin):
-    list_display = ('name', 'min_months', 'max_months', 'score', 'updated_at')
+    list_display = ('name', 'branch', 'min_months', 'max_months', 'score', 'updated_at')
+    list_filter = ('branch',)
+    search_fields = ('name', 'branch__name')
     list_editable = ('score',)
     list_per_page = 25
 

@@ -65,16 +65,17 @@ export default function IncentiveMaster({ token, user, selectedBranch }) {
     setLoading(true);
     try {
       const headers = { 'Authorization': `Token ${token}` };
+      const branchQuery = selectedBranch ? `?branch=${encodeURIComponent(selectedBranch)}` : '';
 
       // Periods
-      const resPeriods = await fetch(`http://${window.location.hostname}:8000/api/incentives/periods/`, { headers });
+      const resPeriods = await fetch(`http://${window.location.hostname}:8000/api/incentives/periods/${branchQuery}`, { headers });
       if (resPeriods.ok) {
         const data = await resPeriods.json();
         setPeriods(data);
       }
 
       // Divisions
-      const resDivs = await fetch(`http://${window.location.hostname}:8000/api/incentives/division-rates/`, { headers });
+      const resDivs = await fetch(`http://${window.location.hostname}:8000/api/incentives/division-rates/${branchQuery}`, { headers });
       if (resDivs.ok) {
         const data = await resDivs.json();
         setDivisions(data);
@@ -84,14 +85,14 @@ export default function IncentiveMaster({ token, user, selectedBranch }) {
       }
 
       // Level 1 Configs
-      const resLvls = await fetch(`http://${window.location.hostname}:8000/api/incentives/level-configs/`, { headers });
+      const resLvls = await fetch(`http://${window.location.hostname}:8000/api/incentives/level-configs/${branchQuery}`, { headers });
       if (resLvls.ok) {
         const data = await resLvls.json();
         setLevelConfigs(data);
       }
 
       // Level 2 Experience Configs
-      const resExp = await fetch(`http://${window.location.hostname}:8000/api/incentives/experience-configs/`, { headers });
+      const resExp = await fetch(`http://${window.location.hostname}:8000/api/incentives/experience-configs/${branchQuery}`, { headers });
       if (resExp.ok) {
         const data = await resExp.json();
         setExpConfigs(data);
@@ -105,7 +106,7 @@ export default function IncentiveMaster({ token, user, selectedBranch }) {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [selectedBranch]);
 
   // Period actions
   const handleSavePeriod = async (e) => {
@@ -123,6 +124,9 @@ export default function IncentiveMaster({ token, user, selectedBranch }) {
 
       // Send payload without internal UI 'year' helper property
       const { year, ...payload } = periodForm;
+      if (selectedBranch && !payload.branch) {
+        payload.branch = selectedBranch;
+      }
 
       const res = await fetch(url, {
         method,
@@ -180,7 +184,8 @@ export default function IncentiveMaster({ token, user, selectedBranch }) {
     try {
       const res = await fetch(`http://${window.location.hostname}:8000/api/incentives/division-rates/sync-from-employees/`, {
         method: 'POST',
-        headers: { 'Authorization': `Token ${token}` }
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` },
+        body: JSON.stringify({ branch: selectedBranch })
       });
       if (res.ok) {
         const data = await res.json();
@@ -198,7 +203,7 @@ export default function IncentiveMaster({ token, user, selectedBranch }) {
       const res = await fetch(`http://${window.location.hostname}:8000/api/incentives/division-rates/bulk-update/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` },
-        body: JSON.stringify({ items })
+        body: JSON.stringify({ branch: selectedBranch, items })
       });
       if (res.ok) {
         triggerToast('Division rates updated successfully');
@@ -218,10 +223,15 @@ export default function IncentiveMaster({ token, user, selectedBranch }) {
         : `http://${window.location.hostname}:8000/api/incentives/division-rates/`;
       const method = divisionForm.id ? 'PUT' : 'POST';
 
+      const payload = { ...divisionForm };
+      if (selectedBranch && !payload.branch) {
+        payload.branch = selectedBranch;
+      }
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` },
-        body: JSON.stringify(divisionForm)
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         triggerToast(divisionForm.id ? 'Division updated' : 'Division added');
@@ -266,7 +276,8 @@ export default function IncentiveMaster({ token, user, selectedBranch }) {
     try {
       const res = await fetch(`http://${window.location.hostname}:8000/api/incentives/level-configs/sync-from-employees/`, {
         method: 'POST',
-        headers: { 'Authorization': `Token ${token}` }
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` },
+        body: JSON.stringify({ branch: selectedBranch })
       });
       if (res.ok) {
         const data = await res.json();
@@ -287,10 +298,15 @@ export default function IncentiveMaster({ token, user, selectedBranch }) {
         : `http://${window.location.hostname}:8000/api/incentives/level-configs/`;
       const method = levelForm.id ? 'PUT' : 'POST';
 
+      const payload = { ...levelForm };
+      if (selectedBranch && !payload.branch) {
+        payload.branch = selectedBranch;
+      }
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` },
-        body: JSON.stringify(levelForm)
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         triggerToast('Level saved successfully');
@@ -329,10 +345,15 @@ export default function IncentiveMaster({ token, user, selectedBranch }) {
         : `http://${window.location.hostname}:8000/api/incentives/experience-configs/`;
       const method = expForm.id ? 'PUT' : 'POST';
 
+      const payload = { ...expForm };
+      if (selectedBranch && !payload.branch) {
+        payload.branch = selectedBranch;
+      }
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` },
-        body: JSON.stringify(expForm)
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         triggerToast('Experience bracket saved');
@@ -378,9 +399,27 @@ export default function IncentiveMaster({ token, user, selectedBranch }) {
             <Award size={26} color="var(--primary)" />
             <span>Incentive Configuration & Master</span>
           </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0 }}>
-            Configure incentive periods, cut-off dates, division fixed rates, and calculation unit scores.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginTop: '4px' }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0 }}>
+              Configure incentive periods, cut-off dates, division fixed rates, and calculation unit scores.
+            </p>
+            {selectedBranch && (
+              <span style={{ 
+                backgroundColor: '#eff6ff', 
+                border: '1px solid #bfdbfe', 
+                borderRadius: '6px', 
+                padding: '2px 10px', 
+                fontSize: '12px', 
+                color: '#1d4ed8', 
+                fontWeight: '600',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                Branch: {selectedBranch}
+              </span>
+            )}
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>

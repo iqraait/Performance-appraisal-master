@@ -1305,6 +1305,7 @@ class AppraisalViewSet(viewsets.ModelViewSet):
                 dept_admin = user.department_admin
                 if not dept_admin.departments or not dept_admin.locations or not dept_admin.branches:
                     return queryset.none()
+                queryset = queryset.exclude(employee_code=user.username)
                 dept_filter = Q()
                 for d in user.department_admin.departments:
                     dept_filter |= Q(department__iexact=d) | Q(department__icontains=d)
@@ -2586,40 +2587,77 @@ class IncentivePeriodViewSet(viewsets.ModelViewSet):
     serializer_class = IncentivePeriodSerializer
     permission_classes = [IsAdminUserOrReadOnly]
 
+    def get_queryset(self):
+        qs = IncentivePeriod.objects.all()
+        branch = self.request.query_params.get('branch')
+        if branch:
+            qs = qs.filter(Q(branch__name__iexact=branch) | Q(branch__id=branch if str(branch).isdigit() else -1))
+        return qs
+
     def perform_create(self, serializer):
-        instance = serializer.save()
+        branch_param = self.request.data.get('branch') or self.request.query_params.get('branch')
+        branch_obj = None
+        if branch_param:
+            branch_obj = Branch.objects.filter(Q(name__iexact=branch_param) | Q(id=branch_param if str(branch_param).isdigit() else -1)).first()
+        if branch_obj and not serializer.validated_data.get('branch'):
+            instance = serializer.save(branch=branch_obj)
+        else:
+            instance = serializer.save()
+
         if instance.is_active:
-            IncentivePeriod.objects.exclude(pk=instance.pk).update(is_active=False)
+            qs = IncentivePeriod.objects.exclude(pk=instance.pk)
+            if instance.branch:
+                qs = qs.filter(branch=instance.branch)
+            else:
+                qs = qs.filter(branch__isnull=True)
+            qs.update(is_active=False)
 
     def perform_update(self, serializer):
-        instance = serializer.save()
+        branch_param = self.request.data.get('branch') or self.request.query_params.get('branch')
+        branch_obj = None
+        if branch_param:
+            branch_obj = Branch.objects.filter(Q(name__iexact=branch_param) | Q(id=branch_param if str(branch_param).isdigit() else -1)).first()
+        if branch_obj and not serializer.validated_data.get('branch'):
+            instance = serializer.save(branch=branch_obj)
+        else:
+            instance = serializer.save()
+
         if instance.is_active:
-            IncentivePeriod.objects.exclude(pk=instance.pk).update(is_active=False)
+            qs = IncentivePeriod.objects.exclude(pk=instance.pk)
+            if instance.branch:
+                qs = qs.filter(branch=instance.branch)
+            else:
+                qs = qs.filter(branch__isnull=True)
+            qs.update(is_active=False)
 
     @action(detail=True, methods=['post'], url_path='set-active')
     def set_active(self, request, pk=None):
         period = self.get_object()
-        IncentivePeriod.objects.exclude(pk=period.pk).update(is_active=False)
+        qs = IncentivePeriod.objects.exclude(pk=period.pk)
+        if period.branch:
+            qs = qs.filter(branch=period.branch)
+        else:
+            qs = qs.filter(branch__isnull=True)
+        qs.update(is_active=False)
         period.is_active = True
         period.save(update_fields=['is_active'])
         return Response({"message": f"Period '{period.name}' set as active.", "period": self.get_serializer(period).data})
 
     def perform_destroy(self, instance):
         # 1. Delete all employees belonging to this period in Employee Master (both active and trashed)
-        Employee.objects.filter(
-            Q(incentive_period=instance) | 
-            Q(assignment_period__iexact=instance.name) | 
-            Q(assignment_period__iexact=instance.months)
-        ).delete()
+        emp_filter = Q(incentive_period=instance) | Q(assignment_period__iexact=instance.name) | Q(assignment_period__iexact=instance.months)
+        if instance.branch:
+            emp_filter = emp_filter & Q(branch=instance.branch)
+        Employee.objects.filter(emp_filter).delete()
 
         # 2. Delete all incentive records belonging to this period
         IncentiveRecord.objects.filter(period=instance).delete()
 
         # 3. Delete all appraisals associated with this period
-        Appraisal.objects.filter(
-            Q(assignment_period__iexact=instance.name) | 
-            Q(assignment_period__iexact=instance.months)
-        ).delete()
+        app_filter = Q(assignment_period__iexact=instance.name) | Q(assignment_period__iexact=instance.months)
+        if instance.branch:
+            app_filter = app_filter & Q(branch=instance.branch)
+        Appraisal.objects.filter(app_filter).delete()
 
         # NOTE: DepartmentAdmin records, tagged departments, tagged locations, tagged branches,
         # and admin users are NEVER touched or modified!
@@ -2631,14 +2669,49 @@ class DivisionRateViewSet(viewsets.ModelViewSet):
     serializer_class = DivisionRateSerializer
     permission_classes = [IsAdminUserOrReadOnly]
 
+    def get_queryset(self):
+        qs = DivisionRate.objects.all()
+        branch = self.request.query_params.get('branch')
+        if branch:
+            qs = qs.filter(Q(branch__name__iexact=branch) | Q(branch__id=branch if str(branch).isdigit() else -1))
+        return qs
+
+    def perform_create(self, serializer):
+        branch_param = self.request.data.get('branch') or self.request.query_params.get('branch')
+        branch_obj = None
+        if branch_param:
+            branch_obj = Branch.objects.filter(Q(name__iexact=branch_param) | Q(id=branch_param if str(branch_param).isdigit() else -1)).first()
+        if branch_obj and not serializer.validated_data.get('branch'):
+            serializer.save(branch=branch_obj)
+        else:
+            serializer.save()
+
+    def perform_update(self, serializer):
+        branch_param = self.request.data.get('branch') or self.request.query_params.get('branch')
+        branch_obj = None
+        if branch_param:
+            branch_obj = Branch.objects.filter(Q(name__iexact=branch_param) | Q(id=branch_param if str(branch_param).isdigit() else -1)).first()
+        if branch_obj and not serializer.validated_data.get('branch'):
+            serializer.save(branch=branch_obj)
+        else:
+            serializer.save()
+
     @action(detail=False, methods=['post'], url_path='sync-from-employees')
     def sync_from_employees(self, request):
-        divisions = Employee.objects.exclude(division='').values_list('division', flat=True).distinct()
+        branch_param = request.data.get('branch') or request.query_params.get('branch')
+        branch_obj = None
+        emp_qs = Employee.objects.exclude(division='')
+        if branch_param:
+            branch_obj = Branch.objects.filter(Q(name__iexact=branch_param) | Q(id=branch_param if str(branch_param).isdigit() else -1)).first()
+            if branch_obj:
+                emp_qs = emp_qs.filter(branch=branch_obj)
+        divisions = emp_qs.values_list('division', flat=True).distinct()
         created_count = 0
         for d in divisions:
             d_clean = (d or '').strip()
             if d_clean:
-                _, created = DivisionRate.objects.get_or_create(division_name=d_clean, defaults={'rate': 0.0})
+                filter_kwargs = {'division_name': d_clean, 'branch': branch_obj}
+                _, created = DivisionRate.objects.get_or_create(defaults={'rate': 0.0}, **filter_kwargs)
                 if created:
                     created_count += 1
         return Response({
@@ -2649,18 +2722,30 @@ class DivisionRateViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='bulk-update')
     def bulk_update_rates(self, request):
         items = request.data.get('items', [])
+        branch_param = request.data.get('branch') or request.query_params.get('branch')
+        branch_obj = None
+        if branch_param:
+            branch_obj = Branch.objects.filter(Q(name__iexact=branch_param) | Q(id=branch_param if str(branch_param).isdigit() else -1)).first()
         updated = 0
         for item in items:
             div_id = item.get('id')
             rate_val = item.get('rate')
+            div_name = item.get('division_name')
             if div_id is not None and rate_val is not None:
                 try:
                     obj = DivisionRate.objects.get(id=div_id)
                     obj.rate = float(rate_val)
-                    obj.save(update_fields=['rate', 'updated_at'])
+                    if branch_obj and not obj.branch:
+                        obj.branch = branch_obj
+                    obj.save(update_fields=['rate', 'branch', 'updated_at'])
                     updated += 1
                 except DivisionRate.DoesNotExist:
                     pass
+            elif div_name and rate_val is not None and branch_obj:
+                obj, _ = DivisionRate.objects.get_or_create(branch=branch_obj, division_name=div_name, defaults={'rate': float(rate_val)})
+                obj.rate = float(rate_val)
+                obj.save(update_fields=['rate', 'updated_at'])
+                updated += 1
         return Response({
             "message": f"Updated {updated} division rate(s).",
             "divisions": self.get_serializer(self.get_queryset(), many=True).data
@@ -2672,16 +2757,51 @@ class EmployeeLevelConfigViewSet(viewsets.ModelViewSet):
     serializer_class = EmployeeLevelConfigSerializer
     permission_classes = [IsAdminUserOrReadOnly]
 
+    def get_queryset(self):
+        qs = EmployeeLevelConfig.objects.all()
+        branch = self.request.query_params.get('branch')
+        if branch:
+            qs = qs.filter(Q(branch__name__iexact=branch) | Q(branch__id=branch if str(branch).isdigit() else -1))
+        return qs
+
+    def perform_create(self, serializer):
+        branch_param = self.request.data.get('branch') or self.request.query_params.get('branch')
+        branch_obj = None
+        if branch_param:
+            branch_obj = Branch.objects.filter(Q(name__iexact=branch_param) | Q(id=branch_param if str(branch_param).isdigit() else -1)).first()
+        if branch_obj and not serializer.validated_data.get('branch'):
+            serializer.save(branch=branch_obj)
+        else:
+            serializer.save()
+
+    def perform_update(self, serializer):
+        branch_param = self.request.data.get('branch') or self.request.query_params.get('branch')
+        branch_obj = None
+        if branch_param:
+            branch_obj = Branch.objects.filter(Q(name__iexact=branch_param) | Q(id=branch_param if str(branch_param).isdigit() else -1)).first()
+        if branch_obj and not serializer.validated_data.get('branch'):
+            serializer.save(branch=branch_obj)
+        else:
+            serializer.save()
+
     @action(detail=False, methods=['post'], url_path='sync-from-employees')
     def sync_from_employees(self, request):
-        levels = Employee.objects.exclude(level='').values_list('level', flat=True).distinct()
+        branch_param = request.data.get('branch') or request.query_params.get('branch')
+        branch_obj = None
+        emp_qs = Employee.objects.exclude(level='')
+        if branch_param:
+            branch_obj = Branch.objects.filter(Q(name__iexact=branch_param) | Q(id=branch_param if str(branch_param).isdigit() else -1)).first()
+            if branch_obj:
+                emp_qs = emp_qs.filter(branch=branch_obj)
+        levels = emp_qs.values_list('level', flat=True).distinct()
         created_count = 0
         for lvl in levels:
             lvl_clean = (lvl or '').strip().upper()
             if lvl_clean:
+                filter_kwargs = {'level_code': lvl_clean, 'branch': branch_obj}
                 _, created = EmployeeLevelConfig.objects.get_or_create(
-                    level_code=lvl_clean, 
-                    defaults={'description': f'Level {lvl_clean}', 'score': 1.0}
+                    defaults={'description': f'Level {lvl_clean}', 'score': 1.0},
+                    **filter_kwargs
                 )
                 if created:
                     created_count += 1
@@ -2695,6 +2815,33 @@ class ExperienceLevelConfigViewSet(viewsets.ModelViewSet):
     queryset = ExperienceLevelConfig.objects.all()
     serializer_class = ExperienceLevelConfigSerializer
     permission_classes = [IsAdminUserOrReadOnly]
+
+    def get_queryset(self):
+        qs = ExperienceLevelConfig.objects.all()
+        branch = self.request.query_params.get('branch')
+        if branch:
+            qs = qs.filter(Q(branch__name__iexact=branch) | Q(branch__id=branch if str(branch).isdigit() else -1))
+        return qs
+
+    def perform_create(self, serializer):
+        branch_param = self.request.data.get('branch') or self.request.query_params.get('branch')
+        branch_obj = None
+        if branch_param:
+            branch_obj = Branch.objects.filter(Q(name__iexact=branch_param) | Q(id=branch_param if str(branch_param).isdigit() else -1)).first()
+        if branch_obj and not serializer.validated_data.get('branch'):
+            serializer.save(branch=branch_obj)
+        else:
+            serializer.save()
+
+    def perform_update(self, serializer):
+        branch_param = self.request.data.get('branch') or self.request.query_params.get('branch')
+        branch_obj = None
+        if branch_param:
+            branch_obj = Branch.objects.filter(Q(name__iexact=branch_param) | Q(id=branch_param if str(branch_param).isdigit() else -1)).first()
+        if branch_obj and not serializer.validated_data.get('branch'):
+            serializer.save(branch=branch_obj)
+        else:
+            serializer.save()
 
 
 def compute_employee_incentive(emp, period, div_rates_map, level_scores_map, exp_brackets, appraisal=None, existing_record=None):
@@ -2813,24 +2960,42 @@ class IncentiveCalculationView(APIView):
         status_param = request.query_params.get('status')
         search_query = request.query_params.get('search')
 
+        # Select branch
+        branch_obj = None
+        if branch_param:
+            branch_obj = Branch.objects.filter(Q(name__iexact=branch_param) | Q(id=branch_param if str(branch_param).isdigit() else -1)).first()
+
         # Select period
         if user and user.is_authenticated and not user.is_superuser and hasattr(user, 'department_admin'):
-            active_p = IncentivePeriod.objects.filter(is_active=True).first()
-            period = active_p or IncentivePeriod.objects.first()
+            active_p_qs = IncentivePeriod.objects.filter(is_active=True)
+            if branch_obj:
+                active_p_qs = active_p_qs.filter(branch=branch_obj)
+            period = active_p_qs.first() or IncentivePeriod.objects.filter(is_active=True).first() or IncentivePeriod.objects.first()
         elif period_id:
             period = IncentivePeriod.objects.filter(id=period_id).first()
         else:
-            period = IncentivePeriod.objects.filter(is_active=True).first() or IncentivePeriod.objects.first()
+            active_p_qs = IncentivePeriod.objects.filter(is_active=True)
+            if branch_obj:
+                active_p_qs = active_p_qs.filter(branch=branch_obj)
+            period = active_p_qs.first() or IncentivePeriod.objects.filter(is_active=True).first() or IncentivePeriod.objects.first()
 
         if not period:
             return Response({"error": "No incentive period defined. Please create an incentive period first."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Division rates & Level configurations
-        div_rates_map = {d.division_name.strip().lower(): d.rate for d in DivisionRate.objects.all()}
-        level_scores_map = {l.level_code.strip().upper(): l.score for l in EmployeeLevelConfig.objects.all()}
-        for l in EmployeeLevelConfig.objects.all():
+        # Division rates & Level configurations scoped to the branch
+        div_rates_qs = DivisionRate.objects.all()
+        lvl_qs = EmployeeLevelConfig.objects.all()
+        exp_qs = ExperienceLevelConfig.objects.all()
+        if branch_obj:
+            div_rates_qs = div_rates_qs.filter(branch=branch_obj)
+            lvl_qs = lvl_qs.filter(branch=branch_obj)
+            exp_qs = exp_qs.filter(branch=branch_obj)
+
+        div_rates_map = {d.division_name.strip().lower(): d.rate for d in div_rates_qs}
+        level_scores_map = {l.level_code.strip().upper(): l.score for l in lvl_qs}
+        for l in lvl_qs:
             level_scores_map[l.level_code.strip().lower()] = l.score
-        exp_brackets = list(ExperienceLevelConfig.objects.all().order_by('min_months'))
+        exp_brackets = list(exp_qs.order_by('min_months'))
 
         # Employees query - strictly isolated to the active or selected period, excluding trashed
         emp_qs = Employee.objects.filter(status='Active', is_trashed=False).filter(
@@ -2951,11 +3116,31 @@ class IncentiveProcessActionView(APIView):
             emp_qs = Employee.objects.filter(id__in=employee_ids)
 
         from django.utils import timezone
-        div_rates_map = {d.division_name.strip().lower(): d.rate for d in DivisionRate.objects.all()}
-        level_scores_map = {l.level_code.strip().upper(): l.score for l in EmployeeLevelConfig.objects.all()}
-        for l in EmployeeLevelConfig.objects.all():
-            level_scores_map[l.level_code.strip().lower()] = l.score
-        exp_brackets = list(ExperienceLevelConfig.objects.all().order_by('min_months'))
+
+        # Branch-scoped configurations cache
+        branch_configs_cache = {}
+        def get_branch_configs_for_emp(b_obj):
+            bid = b_obj.id if b_obj else 'null'
+            if bid in branch_configs_cache:
+                return branch_configs_cache[bid]
+            
+            div_qs = DivisionRate.objects.filter(branch=b_obj) if b_obj else DivisionRate.objects.filter(branch__isnull=True)
+            lvl_qs = EmployeeLevelConfig.objects.filter(branch=b_obj) if b_obj else EmployeeLevelConfig.objects.filter(branch__isnull=True)
+            exp_qs = ExperienceLevelConfig.objects.filter(branch=b_obj) if b_obj else ExperienceLevelConfig.objects.filter(branch__isnull=True)
+
+            # Fallback for levels/experience if branch hasn't configured custom brackets yet
+            if not lvl_qs.exists():
+                lvl_qs = EmployeeLevelConfig.objects.all()
+            if not exp_qs.exists():
+                exp_qs = ExperienceLevelConfig.objects.all()
+
+            d_map = {d.division_name.strip().lower(): d.rate for d in div_qs}
+            l_map = {l.level_code.strip().upper(): l.score for l in lvl_qs}
+            for l in lvl_qs:
+                l_map[l.level_code.strip().lower()] = l.score
+            e_brackets = list(exp_qs.order_by('min_months'))
+            branch_configs_cache[bid] = (d_map, l_map, e_brackets)
+            return branch_configs_cache[bid]
 
         appraisals_map = {}
         for app in Appraisal.objects.order_by('-submitted_date'):
@@ -2967,7 +3152,8 @@ class IncentiveProcessActionView(APIView):
             appraisal = appraisals_map.get(emp.employee_code)
             rec, _ = IncentiveRecord.objects.get_or_create(period=period, employee=emp)
             
-            computed = compute_employee_incentive(emp, period, div_rates_map, level_scores_map, exp_brackets, appraisal, rec)
+            emp_div_map, emp_lvl_map, emp_exp_brackets = get_branch_configs_for_emp(emp.branch)
+            computed = compute_employee_incentive(emp, period, emp_div_map, emp_lvl_map, emp_exp_brackets, appraisal, rec)
 
             rec.employee_code = emp.employee_code
             rec.employee_name = emp.name
@@ -3018,19 +3204,35 @@ class IncentiveExcelExportView(APIView):
         dept_param = request.query_params.get('department')
         status_param = request.query_params.get('status')
 
+        branch_param = request.query_params.get('branch')
+        branch_obj = None
+        if branch_param:
+            branch_obj = Branch.objects.filter(Q(name__iexact=branch_param) | Q(id=branch_param if str(branch_param).isdigit() else -1)).first()
+
         if period_id:
             period = IncentivePeriod.objects.filter(id=period_id).first()
         else:
-            period = IncentivePeriod.objects.filter(is_active=True).first() or IncentivePeriod.objects.first()
+            active_p_qs = IncentivePeriod.objects.filter(is_active=True)
+            if branch_obj:
+                active_p_qs = active_p_qs.filter(branch=branch_obj)
+            period = active_p_qs.first() or IncentivePeriod.objects.filter(is_active=True).first() or IncentivePeriod.objects.first()
 
         if not period:
             return Response({"error": "No incentive period found."}, status=status.HTTP_404_NOT_FOUND)
 
-        div_rates_map = {d.division_name.strip().lower(): d.rate for d in DivisionRate.objects.all()}
-        level_scores_map = {l.level_code.strip().upper(): l.score for l in EmployeeLevelConfig.objects.all()}
-        for l in EmployeeLevelConfig.objects.all():
+        div_rates_qs = DivisionRate.objects.all()
+        lvl_qs = EmployeeLevelConfig.objects.all()
+        exp_qs = ExperienceLevelConfig.objects.all()
+        if branch_obj:
+            div_rates_qs = div_rates_qs.filter(branch=branch_obj)
+            lvl_qs = lvl_qs.filter(branch=branch_obj)
+            exp_qs = exp_qs.filter(branch=branch_obj)
+
+        div_rates_map = {d.division_name.strip().lower(): d.rate for d in div_rates_qs}
+        level_scores_map = {l.level_code.strip().upper(): l.score for l in lvl_qs}
+        for l in lvl_qs:
             level_scores_map[l.level_code.strip().lower()] = l.score
-        exp_brackets = list(ExperienceLevelConfig.objects.all().order_by('min_months'))
+        exp_brackets = list(exp_qs.order_by('min_months'))
 
         emp_qs = Employee.objects.filter(status='Active', is_trashed=False).filter(
             Q(incentive_period=period) | 
@@ -3038,6 +3240,8 @@ class IncentiveExcelExportView(APIView):
             Q(assignment_period__iexact=period.name) | 
             Q(assignment_period__iexact=period.months)
         ).distinct()
+        if branch_obj:
+            emp_qs = emp_qs.filter(branch=branch_obj)
         if user and not user.is_superuser and hasattr(user, 'department_admin'):
             dept_admin = user.department_admin
             if dept_admin.departments:

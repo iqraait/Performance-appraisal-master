@@ -373,7 +373,8 @@ class TraineeAssessment(models.Model):
 
 
 class IncentivePeriod(models.Model):
-    name = models.CharField(max_length=100, unique=True, help_text="Incentive period name e.g. Jun, July, Aug")
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, null=True, blank=True, related_name='incentive_periods')
+    name = models.CharField(max_length=100, help_text="Incentive period name e.g. Jun, July, Aug")
     months = models.CharField(max_length=200, blank=True, default='', help_text="Included months e.g. June, July, August")
     cutoff_date = models.DateField(help_text="Cut-off date to calculate staff experience from joining date")
     is_active = models.BooleanField(default=True, help_text="Active period status")
@@ -382,47 +383,59 @@ class IncentivePeriod(models.Model):
 
     class Meta:
         ordering = ['-cutoff_date', '-created_at']
+        unique_together = ('branch', 'name')
 
     def save(self, *args, **kwargs):
         if self.is_active:
-            IncentivePeriod.objects.exclude(pk=self.pk).update(is_active=False)
+            qs = IncentivePeriod.objects.exclude(pk=self.pk)
+            if self.branch:
+                qs = qs.filter(branch=self.branch)
+            else:
+                qs = qs.filter(branch__isnull=True)
+            qs.update(is_active=False)
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        # When an incentive period is deleted, delete all employees in Employee Master for this period
+        # When an incentive period is deleted, delete all employees in Employee Master for this period and branch
         from .models import Employee, Appraisal, IncentiveRecord
-        Employee.objects.filter(
-            models.Q(incentive_period=self) | 
-            models.Q(assignment_period__iexact=self.name) | 
-            models.Q(assignment_period__iexact=self.months)
-        ).delete()
-        Appraisal.objects.filter(
-            models.Q(assignment_period__iexact=self.name) | 
-            models.Q(assignment_period__iexact=self.months)
-        ).delete()
+        emp_filter = models.Q(incentive_period=self) | models.Q(assignment_period__iexact=self.name) | models.Q(assignment_period__iexact=self.months)
+        if self.branch:
+            emp_filter = emp_filter & models.Q(branch=self.branch)
+        Employee.objects.filter(emp_filter).delete()
+
+        app_filter = models.Q(assignment_period__iexact=self.name) | models.Q(assignment_period__iexact=self.months)
+        if self.branch:
+            app_filter = app_filter & models.Q(branch=self.branch)
+        Appraisal.objects.filter(app_filter).delete()
+
         IncentiveRecord.objects.filter(period=self).delete()
         # Department admins, locations, and users remain 100% untouched
         super().delete(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.name} (Cut-off: {self.cutoff_date})"
+        br_str = f" [{self.branch.name}]" if self.branch else ""
+        return f"{self.name}{br_str} (Cut-off: {self.cutoff_date})"
 
 
 class DivisionRate(models.Model):
-    division_name = models.CharField(max_length=150, unique=True, help_text="Unique Division Name from staff excel")
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, null=True, blank=True, related_name='division_rates')
+    division_name = models.CharField(max_length=150, help_text="Unique Division Name from staff excel")
     rate = models.FloatField(default=0.0, help_text="Incentive Rate Fixed For that Division (e.g. 1000, 2000, 3000)")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['division_name']
+        unique_together = ('branch', 'division_name')
 
     def __str__(self):
-        return f"{self.division_name} - Rate: {self.rate}"
+        br_str = f" [{self.branch.name}]" if self.branch else ""
+        return f"{self.division_name}{br_str} - Rate: {self.rate}"
 
 
 class EmployeeLevelConfig(models.Model):
-    level_code = models.CharField(max_length=50, unique=True, help_text="Level code e.g. MAN, SUP, LOW, MID")
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, null=True, blank=True, related_name='level_configs')
+    level_code = models.CharField(max_length=50, help_text="Level code e.g. MAN, SUP, LOW, MID")
     description = models.CharField(max_length=100, blank=True, default='', help_text="Description e.g. Managerial, Supervisory")
     score = models.FloatField(default=1.0, help_text="Level 1 Score / Units for this level")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -430,12 +443,15 @@ class EmployeeLevelConfig(models.Model):
 
     class Meta:
         ordering = ['level_code']
+        unique_together = ('branch', 'level_code')
 
     def __str__(self):
-        return f"{self.level_code} - Score: {self.score}"
+        br_str = f" [{self.branch.name}]" if self.branch else ""
+        return f"{self.level_code}{br_str} - Score: {self.score}"
 
 
 class ExperienceLevelConfig(models.Model):
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, null=True, blank=True, related_name='experience_configs')
     name = models.CharField(max_length=100, help_text="Bracket name e.g. 1 - 3 Years")
     min_months = models.IntegerField(default=0, help_text="Minimum experience in months (inclusive)")
     max_months = models.IntegerField(default=999, help_text="Maximum experience in months (inclusive)")
@@ -445,9 +461,11 @@ class ExperienceLevelConfig(models.Model):
 
     class Meta:
         ordering = ['min_months']
+        unique_together = ('branch', 'name')
 
     def __str__(self):
-        return f"{self.name} ({self.min_months}-{self.max_months} mos) - Score: {self.score}"
+        br_str = f" [{self.branch.name}]" if self.branch else ""
+        return f"{self.name}{br_str} ({self.min_months}-{self.max_months} mos) - Score: {self.score}"
 
 
 class IncentiveRecord(models.Model):

@@ -303,7 +303,13 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
         headers: token ? { 'Authorization': `Token ${token}` } : {}
       });
       if (response.ok) {
-        const data = await response.json();
+        let data = await response.json();
+        if (user && user.role === 'department_admin' && user.username) {
+          const currentUsername = String(user.username).trim().toLowerCase();
+          data = (Array.isArray(data) ? data : []).filter(item => 
+            String(item.employee_code || '').trim().toLowerCase() !== currentUsername
+          );
+        }
         setMySubmissions(data);
       }
     } catch (err) {

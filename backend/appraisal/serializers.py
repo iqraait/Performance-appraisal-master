@@ -522,24 +522,36 @@ class EmailConfigSerializer(serializers.ModelSerializer):
 
 
 class IncentivePeriodSerializer(serializers.ModelSerializer):
+    branch = AutoCreateBranchField(slug_field='name', queryset=Branch.objects.all(), required=False, allow_null=True)
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+
     class Meta:
         model = IncentivePeriod
         fields = '__all__'
 
 
 class DivisionRateSerializer(serializers.ModelSerializer):
+    branch = AutoCreateBranchField(slug_field='name', queryset=Branch.objects.all(), required=False, allow_null=True)
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+
     class Meta:
         model = DivisionRate
         fields = '__all__'
 
 
 class EmployeeLevelConfigSerializer(serializers.ModelSerializer):
+    branch = AutoCreateBranchField(slug_field='name', queryset=Branch.objects.all(), required=False, allow_null=True)
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+
     class Meta:
         model = EmployeeLevelConfig
         fields = '__all__'
 
 
 class ExperienceLevelConfigSerializer(serializers.ModelSerializer):
+    branch = AutoCreateBranchField(slug_field='name', queryset=Branch.objects.all(), required=False, allow_null=True)
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+
     class Meta:
         model = ExperienceLevelConfig
         fields = '__all__'

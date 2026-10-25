@@ -17,6 +17,7 @@ htmlcov/
 db.sqlite3
 media/
 static/collected/
+*.backup*
 
 # Node modules and build files
 node_modules/

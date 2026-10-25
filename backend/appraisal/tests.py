@@ -449,13 +449,15 @@ class AppraisalLocationValidationTests(APITestCase):
 
 class EmployeeAutoFetchTests(APITestCase):
     def setUp(self):
-        from appraisal.models import DepartmentAdmin
+        from appraisal.models import DepartmentAdmin, Branch
+        self.branch = Branch.objects.create(name="Calicut")
         # Create department admin user
         self.dept_admin_user = User.objects.create_user('admin101', 'admin101@test.com', 'adminpass')
         self.dept_admin = DepartmentAdmin.objects.create(
             user=self.dept_admin_user,
             departments=["Engineering"],
-            locations=["Manager pool"]
+            locations=["Manager pool"],
+            branches=["Calicut"]
         )
 
         # Create multi-location employee (same code, different locations)
@@ -464,6 +466,7 @@ class EmployeeAutoFetchTests(APITestCase):
             name="Multi Location Staff",
             department="Engineering",
             location="Disallowed Clinic",
+            branch=self.branch,
             designation="Developer",
             date_of_joining=datetime.date(2024, 1, 1),
             assignment_period="Annual",
@@ -474,6 +477,7 @@ class EmployeeAutoFetchTests(APITestCase):
             name="Multi Location Staff",
             department="Engineering",
             location="Manager pool",
+            branch=self.branch,
             designation="Developer",
             date_of_joining=datetime.date(2024, 1, 1),
             assignment_period="Annual",
