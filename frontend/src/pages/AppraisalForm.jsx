@@ -847,7 +847,7 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
   const hasBranchAccess = !isDeptAdmin || (adminBranches.length > 0 && (!selectedBranch || adminBranches.includes(selectedBranch)));
 
   const loggedInCode = (user && user.username) ? String(user.username).trim().toLowerCase() : '';
-  const normalizeLoc = (str) => (str || '').replace(/^na[\\/]/i, '').replace(/[\s\-_/]/g, '').trim().toLowerCase();
+  const normalizeLoc = (str) => (str || '').replace(/^na[\\/]+/i, '').trim().toLowerCase();
 
   const filteredEmployeesList = (selectedDept && hasBranchAccess)
     ? allEmployees
@@ -856,13 +856,13 @@ export default function AppraisalForm({ token, user, selectedBranch }) {
           if (!depts.includes(selectedDept.trim().toLowerCase())) return false;
           
           if (selectedLoc) {
+            const selRaw = selectedLoc.trim().toLowerCase();
             const selClean = normalizeLoc(selectedLoc);
             const locs = (e.location || '').split(',').map(s => s.trim());
             return locs.some(l => {
+              const lRaw = l.toLowerCase();
               const lClean = normalizeLoc(l);
-              return l.toLowerCase() === selectedLoc.toLowerCase() || 
-                     lClean === selClean ||
-                     (lClean && selClean && (lClean.includes(selClean) || selClean.includes(lClean)));
+              return lRaw === selRaw || lClean === selClean || lRaw === selClean || lClean === selRaw;
             });
           }
           return true;

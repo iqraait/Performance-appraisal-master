@@ -302,10 +302,16 @@ export default function Dashboard({ token, user, selectedBranch }) {
         }
       }
 
-      // Location filter (support multi-tagged locations)
+      // Location filter (support multi-tagged locations with exact token matching)
       if (tableLocFilter !== 'All') {
+        const selRaw = tableLocFilter.trim().toLowerCase();
+        const selClean = selRaw.replace(/^na[\\/]+/i, '').trim();
         const itemLocs = (item.location || '').split(',').map(l => l.trim().toLowerCase());
-        if (!itemLocs.includes(tableLocFilter.toLowerCase())) {
+        const matchLoc = itemLocs.some(l => {
+          const lClean = l.replace(/^na[\\/]+/i, '').trim();
+          return l === selRaw || lClean === selClean || l === selClean || lClean === selRaw;
+        });
+        if (!matchLoc) {
           return false;
         }
       }

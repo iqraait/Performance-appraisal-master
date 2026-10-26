@@ -3,6 +3,7 @@ import xlrd
 import csv
 import io
 import datetime
+import re
 from html.parser import HTMLParser
 import xml.etree.ElementTree as ET
 from django.shortcuts import render
@@ -47,6 +48,80 @@ class IsAdminUserOrReadOnly(permissions.BasePermission):
         if request.user and request.user.is_authenticated:
             return request.user.is_staff or request.user.is_superuser or hasattr(request.user, 'department_admin')
         return False
+
+
+# Location matching helpers (strict exact full-name token matching)
+def clean_loc_token(s):
+    if not s:
+        return ''
+    return re.sub(r'^(?:na[\\/]+)', '', str(s).strip(), flags=re.IGNORECASE).strip()
+
+def build_exact_location_filter(loc_str, field_name='location'):
+    """
+    Builds a Q filter that strictly matches the full location name as an exact token,
+    whether standalone, prefixed with NA\\ or NA/, or as an item in a comma-separated list.
+    E.g. 'WARD' matches 'WARD', 'NA\\WARD', 'WARD, OPD', but NEVER matches 'GENERAL WARD MALE'.
+    """
+    if not loc_str or not str(loc_str).strip():
+        return Q()
+    raw = str(loc_str).strip()
+    clean = clean_loc_token(raw)
+    tokens = {raw, clean} if clean else {raw}
+    
+    q = Q()
+    for t in tokens:
+        if not t:
+            continue
+        kw = lambda suffix: f'{field_name}__{suffix}'
+        # 1. Exact standalone match (with or without NA\\ / NA/ prefix)
+        q |= Q(**{kw('iexact'): t})
+        q |= Q(**{kw('iexact'): f'NA\\{t}'})
+        q |= Q(**{kw('iexact'): f'NA/{t}'})
+        # 2. Comma-separated: at the beginning
+        q |= Q(**{kw('istartswith'): f'{t},'})
+        q |= Q(**{kw('istartswith'): f'{t} ,'})
+        q |= Q(**{kw('istartswith'): f'NA\\{t},'})
+        q |= Q(**{kw('istartswith'): f'NA/{t},'})
+        # 3. Comma-separated: at the end
+        q |= Q(**{kw('iendswith'): f',{t}'})
+        q |= Q(**{kw('iendswith'): f', {t}'})
+        q |= Q(**{kw('iendswith'): f',NA\\{t}'})
+        q |= Q(**{kw('iendswith'): f', NA\\{t}'})
+        q |= Q(**{kw('iendswith'): f',NA/{t}'})
+        q |= Q(**{kw('iendswith'): f', NA/{t}'})
+        # 4. Comma-separated: in the middle
+        q |= Q(**{kw('icontains'): f',{t},'})
+        q |= Q(**{kw('icontains'): f', {t},'})
+        q |= Q(**{kw('icontains'): f', {t} ,'})
+        q |= Q(**{kw('icontains'): f',NA\\{t},'})
+        q |= Q(**{kw('icontains'): f', NA\\{t},'})
+        q |= Q(**{kw('icontains'): f',NA/{t},'})
+        q |= Q(**{kw('icontains'): f', NA/{t},'})
+    return q
+
+def matches_exact_location(emp_loc, allowed_locs):
+    """
+    In-memory check: returns True if any comma-separated token in emp_loc
+    exactly matches (case-insensitive, ignoring NA\\ / NA/ prefix) any token in allowed_locs.
+    """
+    if not emp_loc or not allowed_locs:
+        return False
+    if isinstance(allowed_locs, str):
+        allowed_locs = [allowed_locs]
+    emp_tokens = set()
+    for t in str(emp_loc).split(','):
+        t_str = t.strip()
+        if t_str:
+            emp_tokens.add(t_str.lower())
+            c = clean_loc_token(t_str)
+            if c:
+                emp_tokens.add(c.lower())
+    for al in allowed_locs:
+        al_raw = str(al).strip().lower()
+        al_clean = clean_loc_token(al).lower()
+        if al_raw in emp_tokens or al_clean in emp_tokens:
+            return True
+    return False
 
 
 def parse_excel_date(raw_val):
@@ -498,7 +573,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
             loc_filter = Q()
             for loc in dept_admin.locations:
-                loc_filter |= Q(location__iexact=loc) | Q(location__icontains=loc)
+                loc_filter |= build_exact_location_filter(loc)
             queryset = queryset.filter(loc_filter)
 
             br_filter = Q()
@@ -561,7 +636,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         if dept:
             queryset = queryset.filter(Q(department__iexact=dept) | Q(department__icontains=dept))
         if location_param:
-            queryset = queryset.filter(Q(location__iexact=location_param) | Q(location__icontains=location_param))
+            queryset = queryset.filter(build_exact_location_filter(location_param))
         if branch_param:
             queryset = queryset.filter(branch__name__iexact=branch_param)
         if desig:
@@ -756,7 +831,7 @@ class EmployeeAutoFetchView(APIView):
             if dept_param:
                 qs = qs.filter(Q(department__iexact=dept_param) | Q(department__icontains=dept_param))
             if loc_param:
-                qs = qs.filter(Q(location__iexact=loc_param) | Q(location__icontains=loc_param))
+                qs = qs.filter(build_exact_location_filter(loc_param))
             if branch_param:
                 qs = qs.filter(branch__name__iexact=branch_param)
             
@@ -786,8 +861,7 @@ class EmployeeAutoFetchView(APIView):
 
                 loc_filtered = []
                 for emp in allowed_qs:
-                    emp_loc = (emp.location or "").lower()
-                    if any(al.lower() in emp_loc for al in dept_admin.locations):
+                    if matches_exact_location(emp.location, dept_admin.locations):
                         loc_filtered.append(emp)
                 
                 if not loc_filtered:
@@ -850,13 +924,13 @@ class EmployeeAutoFetchView(APIView):
             dept_total_active = dept_active_qs.count()
 
             # Location active staff scoped to this department and location (excluding the logged-in department admin)
-            target_location = loc_param if (loc_param and loc_param.lower() in (location or '').lower()) else location
+            target_location = loc_param if (loc_param and matches_exact_location(location, [loc_param])) else location
             loc_filter = {'status': 'Active'}
             if department:
                 loc_filter['department'] = department
             loc_active_qs = Employee.objects.filter(**loc_filter) if target_location else Employee.objects.none()
             if target_location:
-                loc_active_qs = loc_active_qs.filter(Q(location__iexact=target_location) | Q(location__icontains=target_location))
+                loc_active_qs = loc_active_qs.filter(build_exact_location_filter(target_location))
             if branch_obj:
                 loc_active_qs = loc_active_qs.filter(branch=branch_obj)
             if user and user.is_authenticated and hasattr(user, 'department_admin'):
@@ -1131,7 +1205,7 @@ def get_pending_appraisal_records(user, params):
             emp_qs = emp_qs.exclude(employee_code=user.username)
         loc_filter = Q()
         for loc in dept_admin.locations:
-            loc_filter |= Q(location__iexact=loc) | Q(location__icontains=loc)
+            loc_filter |= build_exact_location_filter(loc)
         emp_qs = emp_qs.filter(loc_filter)
         br_filter = Q()
         for br in dept_admin.branches:
@@ -1182,7 +1256,7 @@ def get_pending_appraisal_records(user, params):
                     sub_dept_clean = (sub_dept or '').strip().lower()
                     sub_loc_clean = (sub_loc or '').strip().lower()
                     dept_match = not sub_dept_clean or (sub_dept_clean in emp_depts) or any(d in sub_dept_clean for d in emp_depts)
-                    loc_match = not sub_loc_clean or (sub_loc_clean in emp_locs) or any(l in sub_loc_clean for l in emp_locs)
+                    loc_match = not sub_loc_clean or matches_exact_location(emp.location, [sub_loc])
                     if dept_match and loc_match:
                         is_submitted = True
                         break
@@ -1204,7 +1278,7 @@ def get_pending_appraisal_records(user, params):
     if dept:
         emp_qs = emp_qs.filter(Q(department__iexact=dept) | Q(department__icontains=dept))
     if location_param:
-        emp_qs = emp_qs.filter(Q(location__iexact=location_param) | Q(location__icontains=location_param))
+        emp_qs = emp_qs.filter(build_exact_location_filter(location_param))
     if branch_param:
         emp_qs = emp_qs.filter(branch__name__iexact=branch_param)
     if desig:
@@ -1312,7 +1386,7 @@ class AppraisalViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(dept_filter)
                 loc_filter = Q()
                 for loc in user.department_admin.locations:
-                    loc_filter |= Q(location__iexact=loc) | Q(location__icontains=loc)
+                    loc_filter |= build_exact_location_filter(loc)
                 queryset = queryset.filter(loc_filter)
                 br_filter = Q()
                 for br in user.department_admin.branches:
@@ -1354,7 +1428,7 @@ class AppraisalViewSet(viewsets.ModelViewSet):
             if dept:
                 queryset = queryset.filter(Q(department__iexact=dept) | Q(department__icontains=dept))
             if location_param:
-                queryset = queryset.filter(Q(location__iexact=location_param) | Q(location__icontains=location_param))
+                queryset = queryset.filter(build_exact_location_filter(location_param))
             if branch_param:
                 queryset = queryset.filter(branch__name__iexact=branch_param)
             if desig:
@@ -1551,7 +1625,7 @@ class DashboardStatsView(APIView):
                 appraisals = appraisals.filter(dept_filter).exclude(employee_code=user.username)
                 loc_filter = Q()
                 for loc in dept_admin.locations:
-                    loc_filter |= Q(location__iexact=loc) | Q(location__icontains=loc)
+                    loc_filter |= build_exact_location_filter(loc)
                 employees = employees.filter(loc_filter)
                 appraisals = appraisals.filter(loc_filter)
                 br_filter = Q()
@@ -1731,7 +1805,7 @@ class TrainingEmployeeViewSet(viewsets.ModelViewSet):
             if user.department_admin.locations:
                 loc_filter = Q()
                 for loc in user.department_admin.locations:
-                    loc_filter |= Q(location__iexact=loc)
+                    loc_filter |= build_exact_location_filter(loc)
                 queryset = queryset.filter(loc_filter)
             if user.department_admin.branches:
                 br_filter = Q()
@@ -3016,7 +3090,7 @@ class IncentiveCalculationView(APIView):
             if dept_admin.locations:
                 loc_filter = Q()
                 for loc in dept_admin.locations:
-                    loc_filter |= Q(location__iexact=loc) | Q(location__icontains=loc)
+                    loc_filter |= build_exact_location_filter(loc)
                 emp_qs = emp_qs.filter(loc_filter)
             if dept_admin.branches:
                 br_filter = Q()
@@ -3030,7 +3104,7 @@ class IncentiveCalculationView(APIView):
         if dept_param:
             emp_qs = emp_qs.filter(department__iexact=dept_param)
         if loc_param:
-            emp_qs = emp_qs.filter(location__iexact=loc_param)
+            emp_qs = emp_qs.filter(build_exact_location_filter(loc_param))
         if branch_param:
             emp_qs = emp_qs.filter(branch__name__iexact=branch_param)
         if search_query:
