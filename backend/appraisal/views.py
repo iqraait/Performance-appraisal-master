@@ -357,6 +357,9 @@ class DepartmentAdminViewSet(viewsets.ModelViewSet):
 
 
 class CustomAuthToken(ObtainAuthToken):
+    authentication_classes = ()
+    permission_classes = ()
+
     def post(self, request, *args, **kwargs):
         serializer = self.serializer_class(data=request.data,
                                            context={'request': request})
@@ -422,6 +425,7 @@ class CurrentUserView(APIView):
 
 
 class PasswordResetView(APIView):
+    authentication_classes = ()
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, *args, **kwargs):

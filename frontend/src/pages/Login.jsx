@@ -86,7 +86,7 @@ export default function Login({ onLoginSuccess }) {
           navigate('/appraise');
         }
       } else {
-        setError(data.non_field_errors ? data.non_field_errors[0] : (data.error || 'Invalid username or password'));
+        setError(data.non_field_errors ? data.non_field_errors[0] : (data.error || data.detail || 'Invalid username or password'));
       }
     } catch (err) {
       setError('Connection failed. Is the backend server running?');
